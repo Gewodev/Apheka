@@ -1,0 +1,5 @@
+.floating-timer-surface{isolation:isolate;contain:layout paint;border:1px solid rgb(255 255 255 / .1)}
+.floating-timer-surface .floating-timer-close{opacity:.35;transition:opacity 160ms ease,background-color 160ms ease}
+.floating-timer-surface:hover .floating-timer-close,.floating-timer-surface .floating-timer-close:focus-visible{opacity:1}
+.floating-timer-surface .floating-timer-close:hover{background:rgb(239 68 68 / .18)!important;color:#fca5a5!important}
+@media(prefers-reduced-motion:reduce){.floating-timer-surface .floating-timer-close{transition:none}}

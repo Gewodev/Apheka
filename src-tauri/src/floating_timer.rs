@@ -1,5 +1,18 @@
 use tauri::{Manager, WebviewWindow};
 
+
+#[cfg(windows)]
+fn round_corners(timer:&WebviewWindow){
+    let Ok(handle)=timer.hwnd() else{return;};let Ok(size)=timer.outer_size() else{return;};
+    let radius=(16.0*timer.scale_factor().unwrap_or(1.0)).round() as i32;let hwnd=handle.0 as usize;
+    let _=timer.run_on_main_thread(move||unsafe{
+      use windows_sys::Win32::{Graphics::Gdi::*,UI::WindowsAndMessaging::*};
+      let hwnd=hwnd as *mut core::ffi::c_void;if IsWindow(hwnd)==0{return;}
+      let region=CreateRoundRectRgn(0,0,size.width as i32+1,size.height as i32+1,radius*2,radius*2);
+      if !region.is_null()&&SetWindowRgn(hwnd,region,1)==0{DeleteObject(region);}
+    });
+}
+
 const LABEL: &str = "floating-timer";
 // One lifecycle for both the study button and the timer's X. Never create while
 // destruction is still queued on the native event loop.
@@ -44,14 +57,17 @@ pub async fn toggle_floating_timer(window: WebviewWindow) -> Result<bool, String
         .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
+        // Independent tool surface: clicks and dragging must not activate the
+        // main window or steal keyboard focus from the user's current app.
+        .focused(false)
+        .focusable(false)
         .visible(false);
-    #[cfg(windows)]
-    let builder = builder.owner(&window).map_err(|e| e.to_string())?;
     let timer = builder.build().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    {round_corners(&timer);let on_scale=timer.clone();timer.on_window_event(move|event|{if matches!(event,tauri::WindowEvent::ScaleFactorChanged{..}){round_corners(&on_scale);}});}
     if let Err(error) = timer.show() {
         let _ = destroy(app).await;
         return Err(error.to_string());
     }
-    if window.is_focused().unwrap_or(false) { let _ = timer.set_focus(); }
     Ok(true)
 }

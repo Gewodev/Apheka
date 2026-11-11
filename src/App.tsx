@@ -1,3 +1,4 @@
+import './workspace-6266.css';
 import HabitReminderHost from './components/ui/HabitReminderHost';
 import NotificationNavigation from './components/NotificationNavigation';
 import {useCharvisEnabled, setCharvisEnabled} from './lib/charvisAvailability';

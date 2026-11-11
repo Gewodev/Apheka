@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {visitMusic,type MusicTraversal} from '../src/lib/musicTraversal.ts';
+let state:MusicTraversal={back:[],forward:[]},current:string|null=null;
+const play=(id:string,kind?:'back'|'forward')=>{state=visitMusic(state,current,id,kind);current=id;};
+for(const id of ['a','b','c'])play(id);
+assert.deepEqual(state,{back:['a','b'],forward:[]});
+play('b','back');play('a','back');assert.deepEqual(state,{back:[],forward:['b','c']});
+play('b','forward');play('c','forward');assert.deepEqual(state,{back:['a','b'],forward:[]});
+play('b','back');play('d');assert.deepEqual(state,{back:['a','b'],forward:[]});
+play('b','back');play('a','back');play('b','forward');assert.equal(state.forward[0],'d');
+play('b');assert.equal(state.forward[0],'d','resuming current track preserves forward visits');
+for(let i=0;i<300;i++)play('id'+i);assert.equal(state.back.length,100);
+console.log('PASS playback traversal: back, forward, new selection, resume and bounded history');

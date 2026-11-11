@@ -1,0 +1,70 @@
+{
+  "report": [
+    {
+      "view": "tareas",
+      "samples": [
+        {
+          "target": "page-container task-workspace flex flex-col h-full overflow-y-auto custom-scroll",
+          "range": 11476,
+          "moved": 11476,
+          "frames": 60,
+          "p95ms": 26,
+          "maxFrameMs": 33,
+          "longTasks": []
+        }
+      ]
+    },
+    {
+      "view": "detalle tarea",
+      "samples": [
+        {
+          "target": "page-container task-workspace flex flex-col h-full overflow-y-auto custom-scroll",
+          "range": 11476,
+          "moved": 11476,
+          "frames": 60,
+          "p95ms": 12.7,
+          "maxFrameMs": 13,
+          "longTasks": []
+        },
+        {
+          "target": "task-inspector-content custom-scroll",
+          "range": 126,
+          "moved": 126,
+          "frames": 60,
+          "p95ms": 9,
+          "maxFrameMs": 19,
+          "longTasks": []
+        }
+      ]
+    },
+    {
+      "view": "notas",
+      "samples": []
+    },
+    {
+      "view": "nuevo evento",
+      "samples": [
+        {
+          "target": "",
+          "range": 1044,
+          "moved": 1044,
+          "frames": 60,
+          "p95ms": 20.8,
+          "maxFrameMs": 36,
+          "longTasks": []
+        },
+        {
+          "target": "event-form-body",
+          "range": 395,
+          "moved": 395,
+          "frames": 60,
+          "p95ms": 7.6,
+          "maxFrameMs": 140,
+          "longTasks": []
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "background": "Native release compilation was running; this is a bounded interaction sample, not a hardware benchmark."
+}

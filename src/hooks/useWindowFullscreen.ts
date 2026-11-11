@@ -14,7 +14,7 @@ const port: FullscreenPort = native ? {
   focusContent: async () => {
     if (document.visibilityState === 'visible' && await getCurrentWindow().isFocused()) {
       await getCurrentWebview().setFocus();
-      await recoverPointer(true);
+      if(!windowFullscreen.getSnapshot().active||!compatiblePointerEnabled())await recoverPointer(true);
     }
   },
 } : {
@@ -50,8 +50,8 @@ function hasOpenLayer() {
 export function useFullscreenLifecycle(onError: (message: string) => void) {
   useEffect(() => {
     let disposed = false;
-    const compatiblePointer=native&&/Windows/i.test(navigator.userAgent)?createCompatiblePointer():null;
-    const syncPointer=()=>compatiblePointer?.setEnabled(windowFullscreen.getSnapshot().active&&compatiblePointerEnabled());
+    let compatiblePointer:ReturnType<typeof createCompatiblePointer>|null=null;
+    const syncPointer=()=>{const active=native&&/Windows/i.test(navigator.userAgent)&&windowFullscreen.getSnapshot().active&&compatiblePointerEnabled();if(active){if(!compatiblePointer)compatiblePointer=createCompatiblePointer();compatiblePointer.setEnabled(true);}else{compatiblePointer?.dispose();compatiblePointer=null;}};
     window.addEventListener(POINTER_PREFERENCE_EVENT,syncPointer);
     const unlisten: (() => void)[] = [];
     const attach = (promise: Promise<() => void>) => {

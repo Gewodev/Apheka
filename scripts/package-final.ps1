@@ -31,9 +31,11 @@ try {
   }
   $config = Get-Content -LiteralPath (Join-Path $repo 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
   $version = $config.version
-  $source = Join-Path $repo "src-tauri/target/release/bundle/nsis/APHEKA_${version}_x64-setup.exe"
+  $product = $config.productName
+  $prefix = $product.ToLowerInvariant()
+  $source = Join-Path $repo "src-tauri/target/release/bundle/nsis/${product}_${version}_x64-setup.exe"
   $binary = Get-Item -LiteralPath $source
-  if ($binary.VersionInfo.ProductName -ne 'APHEKA' -or $binary.VersionInfo.ProductVersion -ne $version) { throw 'Installer version mismatch' }
+  if ($binary.VersionInfo.ProductName -ne $product -or $binary.VersionInfo.ProductVersion -ne $version) { throw 'Installer version mismatch' }
   $sourceFiles = @(& rg --files src public src-tauri/src src-tauri/installer-assets src-tauri/resources/asr) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
   $latestSource = ($sourceFiles | ForEach-Object { (Get-Item -LiteralPath (Join-Path $repo $_)).LastWriteTimeUtc } | Sort-Object -Descending | Select-Object -First 1)
   $manifestRewrittenBeforeFrontend=$false
@@ -57,15 +59,15 @@ try {
   $release = [IO.Path]::GetFullPath((Join-Path $repo 'release'))
   if (-not $release.StartsWith($repo + [IO.Path]::DirectorySeparatorChar)) { throw 'Invalid output directory' }
   $null = New-Item -ItemType Directory -Force -Path $release
-  $final = Join-Path $release 'apheka_FINAL.exe'
+  $final = Join-Path $release ($prefix+'_FINAL.exe')
   $sourceHash = Get-ArtifactSha256 $source
   $existingHash = if (Test-Path -LiteralPath $final) { Get-ArtifactSha256 $final } else { '' }
   if ($existingHash -ne $sourceHash) { Copy-Item -LiteralPath $source -Destination $final -Force }
   $finalHash = Get-ArtifactSha256 $final
   if ($sourceHash -ne $finalHash) { throw 'Copied installer hash mismatch' }
   $manifest = [ordered]@{
-    product='APHEKA';version=$version;identifier=$config.identifier
-    file='apheka_FINAL.exe';bytes=(Get-Item -LiteralPath $final).Length;sha256=$finalHash
+    product=$product;version=$version;identifier=$config.identifier
+    file=($prefix+'_FINAL.exe');bytes=(Get-Item -LiteralPath $final).Length;sha256=$finalHash
     modifiedAtUtc=$binary.LastWriteTimeUtc.ToString('o');sourceLatestEditUtc=$latestSource.ToString('o')
     manifestRewrittenBeforeFrontend=$manifestRewrittenBeforeFrontend
     buildCommand='pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis'
@@ -73,6 +75,6 @@ try {
     legacyUpgrade='Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData'
     dataDirectory='com.owa.studio (existing desktop data directory retained)'
   }
-  $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $release 'apheka_FINAL.json') -Encoding UTF8
+  $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $release ($prefix+'_FINAL.json')) -Encoding UTF8
   $manifest | ConvertTo-Json -Depth 4
 } finally { Pop-Location }

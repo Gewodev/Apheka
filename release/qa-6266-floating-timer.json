@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "Paused clock has no periodic React commits",
+    "Repeated hover has no React commits",
+    "Active clock advances",
+    "Close failure/retry remains functional",
+    "X never starts dragging"
+  ],
+  "errors": [],
+  "scope": "Real FloatingTimer in Edge, controlled IPC; native physical input not completed after user Escape"
+}

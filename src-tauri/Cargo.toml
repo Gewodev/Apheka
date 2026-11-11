@@ -1,6 +1,6 @@
 [package]
 name = "owa-studio"
-version = "6.26.5"
+version = "6.26.6"
 description = "A premium study workspace"
 authors = ["Gewodev"]
 edition = "2021"
@@ -36,7 +36,7 @@ tauri-plugin-single-instance = "2"
 tauri-winrt-notification = "=0.7.3"
 webview2-com = "0.38.2"
 windows-core = "0.61"
-windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }
 
 [profile.release]
 panic = "abort" # Strip fatal error messages for smaller binary

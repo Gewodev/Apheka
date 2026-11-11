@@ -1,5 +1,5 @@
 /** A compositor-drawn fallback for Windows devices whose hardware cursor freezes over media. */
-export const POINTER_PREFERENCE='apheka_compatible_pointer_v2';
+export const POINTER_PREFERENCE='pohu_compatible_pointer_v3';
 export const POINTER_PREFERENCE_EVENT='apheka:pointer-preference';
 export function compatiblePointerEnabled() {
   try{return localStorage.getItem(POINTER_PREFERENCE)==='on';}catch{return false;}
@@ -42,20 +42,20 @@ export function createCompatiblePointer() {
   };
   const move=(event:PointerEvent)=>{
     if(!enabled)return;
-    if(event.pointerType!=='mouse'||!document.hasFocus()){hide();return;}
+    if(event.pointerType!=='mouse'||document.visibilityState!=='visible'){hide();return;}
     x=event.clientX;y=event.clientY;visible=true;
     if(!frame)frame=requestAnimationFrame(paint);
   };
   const leave=(event:PointerEvent)=>{if(!event.relatedTarget)hide();};
   const visibility=()=>{if(document.visibilityState!=='visible')hide();};
   document.body.append(overlay);document.head.append(style);
-  window.addEventListener('pointermove',move,{passive:true});
+  window.addEventListener('pointermove',move,{passive:true});window.addEventListener('pointerover',move,{passive:true});window.addEventListener('pointerdown',move,{passive:true});
   window.addEventListener('blur',hide);window.addEventListener('pagehide',hide);
   document.addEventListener('pointerout',leave);document.addEventListener('pointercancel',hide);
   document.addEventListener('contextmenu',hide);document.addEventListener('visibilitychange',visibility);
   return {
     isEnabled:()=>enabled,
     setEnabled(value:boolean){if(enabled===value)return;enabled=value;lastTarget=null;if(!value){hide();cancelAnimationFrame(frame);frame=0;}},
-    dispose(){enabled=false;hide();cancelAnimationFrame(frame);overlay.remove();style.remove();window.removeEventListener('pointermove',move);window.removeEventListener('blur',hide);window.removeEventListener('pagehide',hide);document.removeEventListener('pointerout',leave);document.removeEventListener('pointercancel',hide);document.removeEventListener('contextmenu',hide);document.removeEventListener('visibilitychange',visibility);},
+    dispose(){enabled=false;hide();cancelAnimationFrame(frame);overlay.remove();style.remove();window.removeEventListener('pointermove',move);window.removeEventListener('pointerover',move);window.removeEventListener('pointerdown',move);window.removeEventListener('blur',hide);window.removeEventListener('pagehide',hide);document.removeEventListener('pointerout',leave);document.removeEventListener('pointercancel',hide);document.removeEventListener('contextmenu',hide);document.removeEventListener('visibilitychange',visibility);},
   };
 }

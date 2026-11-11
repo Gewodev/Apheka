@@ -1,3 +1,4 @@
+import {visitMusic,type MusicTraversal,type MusicTravel} from '../lib/musicTraversal';
 import {lazyJsonSnapshot} from '../lib/lazySnapshot';
 import {brunoLibrarySeparation,BRUNO_SEPARATION_KEY} from '../lib/brunoLibrarySeparation';
 import {sameTaskPresentation} from '../lib/viewSnapshots';
@@ -9,7 +10,7 @@ import {prepareTaskSteps,appendTaskStep,taskMinutes} from '../lib/taskStudyPlan'
 import {isLibraryTrack,libraryRadioOrder,nextMusicSelection,radioTracks} from '../lib/musicRadio';
 import {resolvedYouTubeUrl} from '../lib/youtubePlayback';
 import {useNetworkOnline} from '../lib/networkState';
-import {canPlayOffline} from '../lib/musicAvailability';
+import {canPlayOffline,canPlayTrack} from '../lib/musicAvailability';
 import {seconds as studySeconds} from '../lib/studyAnalytics';
 import {reorderNoteSubset} from '../lib/noteOrder';
 import { remainingToDeadline } from '../lib/timerSchedule';
@@ -566,6 +567,7 @@ export interface AppContextType extends AppState {
   shuffleMode: boolean;
   repeatMode: 'none' | 'all' | 'one';
   trackHistory: string[];
+  musicTraversal: MusicTraversal;
   playCounts: Record<string, number>;
   musicQueue: string[];
   queueSource: { pool: string[]; name?: string } | null;
@@ -574,7 +576,7 @@ export interface AppContextType extends AppState {
   downloadPath: string;
   setDownloadPathCtx: (path: string) => void;
   importState: ImportState;
-  playTrack: (id: string, preserveQueue?: boolean) => void;
+  playTrack: (id: string, preserveQueue?: boolean, direction?:MusicTravel) => void;
   toggleMusicPlayback: () => void;
   setIsPlayingMusic: (v: boolean | ((prev: boolean) => boolean)) => void;
   setMusicVolume: (volume: number) => void;
@@ -925,6 +927,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearNotifications = useCallback(() => setNotifications([]), []);
   const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
   const [trackHistory, setTrackHistory] = useState<string[]>([]);
+  const [musicTraversal,setMusicTraversal]=useState<MusicTraversal>({back:[],forward:[]});
+  const musicTraversalRef=useRef(musicTraversal);
   const setShuffleMode = useCallback((mode: boolean) => {
     _setShuffleMode(mode);
     shuffleModeRef.current=mode;
@@ -1027,7 +1031,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const repeatModeRef = useRef(repeatMode);
    const musicQueueRef = useRef(musicQueue);
    const queueSourceRef = useRef(queueSource);
-   const playTrackRef = useRef<(id: string, preserveQueue?: boolean) => void>(() => {});
+   const playTrackRef = useRef<(id: string, preserveQueue?: boolean,direction?:MusicTravel) => void>(() => {});
    const trackHistoryRef = useRef(trackHistory);
    const playCountsRef = useRef(playCounts);
    const repeatOnePlayedRef = useRef(false);
@@ -3016,7 +3020,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }, [hydrated, normalizeMusicFilenames]);
 
-   const playTrack = useCallback((id: string, preserveQueue = false) => {
+   const playTrack = useCallback((id: string, preserveQueue = false, direction?:MusicTravel) => {
+    if(!tracksRef.current.some(track=>track.id===id))return;
     if(settings.musicOffline&&!canPlayOffline(tracksRef.current.find(track=>track.id===id))){addNotification('La reproducción online está desactivada. Puedes usar tu biblioteca local.','info');return;}
     repeatOnePlayedRef.current = false;
     // Same track already loaded â€” just resume (no reload)
@@ -3047,6 +3052,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const travel=visitMusic(musicTraversalRef.current,currentTrackIdRef.current,id,direction);
+    musicTraversalRef.current=travel;setMusicTraversal(travel);
     const playSessionId = crypto.randomUUID();
     activePlaySessionIdRef.current = playSessionId;
     loadingTrackIdRef.current = id;
@@ -3074,7 +3081,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadedTrackIdRef.current = null;
     if (!resumeSeekFlagRef.current) restoreSeekRef.current = null;
     resumeSeekFlagRef.current = false;
-    setCurrentTrackId(id);
+    currentTrackIdRef.current=id;setCurrentTrackId(id);
     setCurrentTrackStartTime(Date.now() / 1000);
     setIsPlayingMusic(!resumeStayPausedRef.current);
     setMusicProgress(restoreSeekRef.current ?? 0);
@@ -3436,6 +3443,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     const onEnded = () => {
+      const forward=repeatModeRef.current!=='one'&&musicTraversalRef.current.forward.find(id=>id!==currentTrackIdRef.current&&tracksRef.current.some(t=>t.id===id&&canPlayTrack(t,playbackSettingsRef.current.musicOffline)));
+      if(forward){playTrackRef.current(forward,true,'forward');if(coverModalTrackIdRef.current)setCoverModalTrackId(forward);return;}
       const result=nextMusicSelection({tracks:tracksRef.current,currentId:currentTrackIdRef.current,queue:musicQueueRef.current,sourcePool:queueSourceRef.current?.pool,shuffle:shuffleModeRef.current,repeat:repeatModeRef.current,history:trackHistoryRef.current,counts:playCountsRef.current,offline:playbackSettingsRef.current.musicOffline});
       if(result.id===currentTrackIdRef.current&&result.id){globalAudio.currentTime=0;void globalAudio.play().catch(()=>setIsPlayingMusic(false));return;}
       musicQueueRef.current=result.queue;setMusicQueue(result.queue);
@@ -4278,7 +4287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTaskId, activeSubtaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
     currentTrackId, coverModalTrackId, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
-    trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
+    trackHistory, musicTraversal, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,

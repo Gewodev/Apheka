@@ -1,0 +1,18 @@
+{
+  "sequence": [
+    "a",
+    "b",
+    "c",
+    "b",
+    "a",
+    "b",
+    "c",
+    "d"
+  ],
+  "checks": [
+    "Actual AppProvider and transport hook",
+    "Previous then Next preserves actual visited songs, including unsaved artist track",
+    "Original playlist scope and remaining queue preserved"
+  ],
+  "errors": []
+}

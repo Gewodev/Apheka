@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Software cursor disabled by default; manual mode explicitly enabled for this test",
+    "Pointer follows motion even when WebView document.hasFocus is stale/false",
+    "Blur hides and next real pointer movement resumes",
+    "Text and button shapes follow targets",
+    "Pen restores native pointer",
+    "Exit/dispose clears the CSS override and overlay"
+  ],
+  "initial": "translate3d(127px, 338px, 0px)",
+  "final": "translate3d(487px, 448px, 0px)",
+  "errors": [],
+  "scope": "Actual compositor cursor module in Edge with false-focus fault injected; physical Windows check interrupted by the user with Escape; no completed physical-input verification in this revision"
+}

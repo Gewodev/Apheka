@@ -1,5 +1,6 @@
 import { FLOATING_FONTS } from '../lib/floatingFonts';
-import { useState, useEffect, useRef } from 'react';
+import './floating-timer.css';
+import { memo, useState, useEffect, useRef } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
@@ -7,6 +8,7 @@ import { DigitSVG, ColonSVG } from './LEDDigits';
 import { ANIMATIONS } from './FloatingAnimations';
 
 const FONTS = FLOATING_FONTS;
+const TimerDigit=memo(DigitSVG),TimerColon=memo(ColonSVG);
 
 interface TimerSync {
   sessionTime: number;
@@ -44,7 +46,6 @@ export default function FloatingTimer() {
   const [fontKey, setFontKey] = useState('led');
   const [hideInFocus, setHideInFocus] = useState(false);
   const [animType, setAnimType] = useState('plant');
-  const [containerHovered, setContainerHovered] = useState(false);
   const [closeError, setCloseError] = useState('');
   const closing = useRef(false);
   const customColors = useRef({ focus: '#E11D48', brk: '#10B981', longBrk: '#F59E0B', chrono: '#3B82F6' });
@@ -83,11 +84,22 @@ export default function FloatingTimer() {
   }, [bgColor]);
 
   useEffect(() => {
+    let disposed=false;
+    let tick:ReturnType<typeof setTimeout>|null=null;
+    const refresh=()=>{
+      if(tick!==null){clearTimeout(tick);tick=null;}
+      if(disposed)return;
+      updateDisplay();
+      const s=lastSync.current;
+      if(s.isTimerActive&&(!s.pomodoroComplete||s.isRest)&&document.visibilityState==='visible'){
+        tick=setTimeout(refresh,1012-((Date.now()-s.ts)%1000));
+      }
+    };
     const unlisten1 = listen('timer:sync', (e: any) => {
       try {
         const p: TimerSync = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
         lastSync.current = { ...p, ts: Date.now() };
-        updateDisplay();
+        refresh();
         updateLabel(p);
         updateColor(p);
       } catch {}
@@ -100,9 +112,11 @@ export default function FloatingTimer() {
     });
     emit('settings:sync:request').catch(() => {});
     emit('timer:sync:request').catch(() => {});
-    const iv = setInterval(updateDisplay, 500);
+    document.addEventListener('visibilitychange',refresh);
     return () => {
-      clearInterval(iv);
+      disposed=true;
+      if(tick!==null)clearTimeout(tick);
+      document.removeEventListener('visibilitychange',refresh);
       unlisten1.then(fn => fn());
       unlisten2.then(fn => fn());
     };
@@ -176,23 +190,23 @@ export default function FloatingTimer() {
   const pomodoroComplete = lastSync.current.pomodoroComplete && !lastSync.current.isRest;
 
   const digits = time.split('');
+  const digitWidth=Math.min(26,112/Math.max(1,time.replace(':','').length));
   const fontInfo = FONTS[fontKey] || FONTS.led;
 
   return (
     <div
+      className="floating-timer-surface"
       onMouseDown={startDrag}
-      onMouseEnter={() => setContainerHovered(true)}
-      onMouseLeave={() => setContainerHovered(false)}
       style={{
-        width: '100vw', height: '100vh',
+        width: '100vw', height: '100vh', borderRadius:16, overflow:'hidden',
         background: bgColor, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         cursor: 'grab', userSelect: 'none', WebkitUserSelect: 'none',
-        position: 'relative', gap: 0,
+        position: 'relative', gap: 4, padding:'14px 10px 10px',boxSizing:'border-box',
       }}
     >
       <button type="button"
-        className="close-btn"
+        className="close-btn floating-timer-close"
         aria-label="Cerrar timer"
         onMouseDown={e => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); void closeTimer(); }}
@@ -204,11 +218,8 @@ export default function FloatingTimer() {
           color: 'rgba(255,255,255,0.5)', cursor: 'pointer', lineHeight: 1,
           background: 'transparent',
           border: 'none',
-          opacity: containerHovered || closeError ? 1 : 0,
-          transition: 'opacity 200ms, background 150ms, color 150ms',
+          ...(closeError?{opacity:1}:{}),
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.8)'; e.currentTarget.style.color = '#fff'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
       >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="4" y1="4" x2="12" y2="12" />
@@ -217,7 +228,7 @@ export default function FloatingTimer() {
       </button>
       {closeError && <span role="alert" style={{position:'absolute',bottom:2,left:4,right:4,fontSize:9,color:'#fca5a5',textAlign:'center'}}>{closeError}</span>}
 
-      <div style={{ height: 18, display: 'flex', alignItems: 'center', marginTop: -10, marginBottom: 4 }}>
+      <div style={{ height:18,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 18px',width:'100%',boxSizing:'border-box',flexShrink:0 }}>
         {!showAnimation && !pomodoroComplete && (
           <span style={{
             fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 9,
@@ -232,7 +243,7 @@ export default function FloatingTimer() {
 
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2,
-        minHeight: 54,
+        minHeight:48,width:'100%',flexShrink:0,
         opacity: (!pomodoroComplete && hideTime && !showAnimation) ? 0 : 1,
         transition: 'opacity 400ms',
       }}>
@@ -259,8 +270,8 @@ export default function FloatingTimer() {
         ) : useLed ? (
           digits.map((ch, i) =>
             ch === ':'
-              ? <ColonSVG key={i} color={color} width={10} height={54} />
-              : <DigitSVG key={i} d={ch} color={color} width={28} height={54} />
+              ? <TimerColon key={i} color={color} width={8} height={48} />
+              : <TimerDigit key={i} d={ch} color={color} width={digitWidth} height={48} />
           )
         ) : (
           <span style={{

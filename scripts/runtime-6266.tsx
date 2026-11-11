@@ -1,0 +1,23 @@
+import {useMusicTransport} from '../src/lib/musicTransport';
+import CourseSessionDialog from '../src/components/views/cursos/CourseSessionDialog';
+import SessionTaskLink from '../src/components/ui/SessionTaskLink';
+import MusicLinkImport from '../src/components/music/MusicLinkImport';
+import MusicPlaylists from '../src/components/music/MusicPlaylists';
+import '../src/session-polish.css';
+import '../src/scroll-surfaces.css';
+import '../src/fonts.css';
+import '../src/index.css';
+import '../src/apheka.css';
+import '../src/workspace.css';
+import '../src/refinement.css';
+import '../src/desktop.css';
+import '../src/studio.css';
+import '../src/quiet.css';
+import '../src/interface.css';
+import '../src/interaction-refinement.css';
+import '../src/workspace-622.css';
+import '../src/input-polish.css';
+import '../src/collection-polish.css';
+import React,{useLayoutEffect,useState} from 'react';import {createRoot} from 'react-dom/client';import {AppContent} from '../src/App';import {AppProvider,useAppSnapshot} from '../src/store/AppContext';import CharvisDocumentPanel from '../src/components/ui/CharvisDocumentPanel';import AnalyticsDrawer from '../src/components/ui/AnalyticsDrawer';import {DeckRunner,DeckEditorModal} from '../src/components/views/cursos/ToolDecks';
+function Harness(){const transport=useMusicTransport();useLayoutEffect(()=>{Object.assign(window,{__qaTransport:transport});},[transport]);const snapshot=useAppSnapshot(),[story,setStory]=useState<string|null>(null);useLayoutEffect(()=>{Object.assign(window,{__qaApp:snapshot,__qaStory:setStory});},[snapshot]);return story==='session'?<CourseSessionDialog initialValue={{title:'',date:new Date().toLocaleDateString('sv'),startTime:'09:00',durationMinutes:30,intensity:5,type:'estudio',groupId:'',topicId:'',repeat:'none',repeatDays:[],repeatUntil:''}} editing={false} course={{name:'Física',color:'#73958b'}} groups={[]} topics={[]} onClose={()=>setStory(null)} onSave={draft=>{Object.assign(window,{__qaSessionDraft:draft});setStory(null);}}/>:story==='task-link'?<SessionTaskLink taskId="t0"/>:story==='import'?<MusicLinkImport/>:story==='lists'?<MusicPlaylists/>:story?.startsWith('editor:')?<DeckEditorModal mode={story.slice(7) as any} accent="#7f9c92" onClose={()=>setStory(null)} onSave={(name,color,content)=>{Object.assign(window,{__qaToolSaved:{name,color,content,mode:story.slice(7)}});setStory(null);}}/>:story==='docx'?<div className="charvis-chat-refined" style={{height:'100dvh',width:'100vw',display:'flex',justifyContent:'center',padding:24}}><CharvisDocumentPanel onClose={()=>setStory(null)} preview={{artifact:{id:'a0000000-0000-4000-8000-000000000001',format:'docx',filename:'Informe.docx',title:'Informe de Física',bytes:5000,spec:{title:'Informe de Física',blocks:[{type:'heading',text:'Energía y medición'},{type:'paragraph',text:'**Energía cinética** y `E = ½mv²`\nUnidades: J = kg·m²·s⁻²; α, Δx.'},{type:'numbered',items:['Medir la masa','Registrar la velocidad']},{type:'table',rows:[['Magnitud','Unidad'],['Energía','J'],['Masa','kg']]}]}}}}/></div>:story==='analytics'?<div style={{position:'relative',height:'100dvh'}}><AnalyticsDrawer isOpen onClose={()=>setStory(null)} studySessions={snapshot().studySessions} tasks={snapshot().tasks}/></div>:story?.startsWith('tool:')?<div style={{height:'100dvh',padding:24}}><DeckRunner mat={{id:'qa-tool',toolMode:story.slice(5),title:'Práctica de prueba',content:JSON.stringify({cards:[{q:'¿Qué magnitud mide la masa?',a:'La cantidad de materia'},{q:'Unidad de fuerza',a:'Newton'}],questions:[{q:'Unidad de fuerza',options:['Newton','Julio','Metro','Segundo'],correct:0}],pairs:[{a:'Fuerza',b:'Newton'},{a:'Energía',b:'Julio'}],items:story==='tool:clozeDeck'?[{text:'La fuerza se mide en ____.',answers:['newtons']}]:story==='tool:catDeck'?[{item:'Newton',cat:'Fuerza'},{item:'Julio',cat:'Energía'}]:[{text:'La energía se conserva.',answer:true}],seqs:[{name:'Resolver',steps:['Leer','Calcular','Comprobar']}],concepts:[{concept:'Energía',source:'Capacidad de realizar trabajo',points:['Conservación','Unidades']}]})}} accent="#a0b1a7" onClose={()=>setStory(null)}/></div>:<AppContent/>;}
+createRoot(document.getElementById('root')!).render(<AppProvider><Harness/></AppProvider>);

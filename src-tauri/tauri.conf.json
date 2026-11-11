@@ -1,6 +1,6 @@
 {
-  "productName": "APHEKA",
-  "version": "6.26.5",
+  "productName": "POHU",
+  "version": "6.26.6",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "APHEKA",
+        "title": "POHU",
         "width": 1200,
         "height": 800,
         "resizable": true,

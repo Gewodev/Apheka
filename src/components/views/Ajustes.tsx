@@ -683,10 +683,10 @@ export default function Ajustes() {
           <Icon size={18} /><span className="settings-category-copy"><strong>{tab.label}</strong><small>{tab.desc}</small></span>
         </button>;})}
       </nav>
-      <div className={`settings-workspace ${activeTab==='perfil' ? 'settings-profile' : ''}`}>
+      <div data-sections={settingsOutline.length} className={`settings-workspace ${activeTab==='perfil' ? 'settings-profile' : ''}`}>
         {/* MAIN AREA */}
         <main ref={settingsContentRef} className="apheka-settings-content" data-category={activeTab}>
-          {activeTab!=='perfil'&&<header className="settings-section-heading"><h2>{TABS.find(t=>t.id===activeTab)?.label}</h2><p>{TABS.find(t=>t.id===activeTab)?.desc}</p><span>{settingsOutline.length} secciones</span></header>}
+          {activeTab!=='perfil'&&<header className="settings-section-heading"><h2>{TABS.find(t=>t.id===activeTab)?.label}</h2><p>{TABS.find(t=>t.id===activeTab)?.desc}</p>{settingsOutline.length>0&&<span>{settingsOutline.length} secciones</span>}</header>}
           <div className="settings-panels">
           <div key={activeTab}>
             {activeTab==='comandos'&&<CommandsSettings/>}
@@ -1657,7 +1657,7 @@ export default function Ajustes() {
 
           </div>
         </main>
-        {activeTab!=='perfil' && <aside className="settings-outline">
+        {activeTab!=='perfil' && settingsOutline.length>0 && <aside className="settings-outline">
           <p className="workspace-eyebrow">En esta sección</p>
           <label className="settings-search"><Search size={15}/><input aria-label="Buscar opción en esta sección" value={settingsSearch} onChange={e=>setSettingsSearch(e.target.value)} placeholder="Buscar opción…" /></label>
           <nav aria-label="Opciones de la categoría">
