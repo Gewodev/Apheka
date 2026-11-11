@@ -7,6 +7,7 @@ pub struct NotificationTarget {
     kind: TargetKind,
     id: Option<String>,
     date: Option<String>,
+    action: Option<StudyAction>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -19,7 +20,11 @@ enum TargetKind {
     Settings,
     Music,
     Downloads,
+    Habits,
 }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum StudyAction { StartBreak, StartSession }
 impl NotificationTarget {
     fn validate(&self) -> Result<(), String> {
         if matches!(
@@ -44,14 +49,22 @@ impl NotificationTarget {
         }) {
             return Err("La fecha de la notificación no es válida".into());
         }
+        if self.action.is_some() && (!matches!(self.kind,TargetKind::Study) || self.id.as_deref().is_none_or(|v| v.is_empty() || v.len()>128)) { return Err("Acción de estudio no válida".into()); }
         Ok(())
+    }
+    fn activated(&self, action: Option<&str>) -> Option<Self> {
+        if !matches!(action,None|Some(""|"open"|"execute")){return None;}
+        let mut target=self.clone();
+        if action != Some("execute") {target.action=None;}
+        Some(target)
     }
     fn label(&self) -> &'static str {
         match self.kind {
             TargetKind::Task => "Ver tarea",
             TargetKind::Event => "Ver evento",
             TargetKind::Session => "Ver sesión",
-            TargetKind::Study => "Ir a Estudio",
+            TargetKind::Study => match self.action {Some(StudyAction::StartBreak)=>"Activar descanso",Some(StudyAction::StartSession)=>"Iniciar sesión",None=>"Ir a Estudio"},
+            TargetKind::Habits => "Registrar hábitos",
             TargetKind::Tasks => "Ver tareas",
             TargetKind::Settings => "Abrir configuración",
             TargetKind::Music => "Abrir música",
@@ -83,17 +96,14 @@ pub async fn send_workspace_notification(
                 .title(&title)
                 .text1(&body)
                 .duration(Duration::Short)
-                .add_button(target.label(), "open")
+                .add_button(target.label(), if target.action.is_some() {"execute"} else {"open"})
                 .on_activated(move |action| {
-                    if action
-                        .as_deref()
-                        .is_none_or(|value| value.is_empty() || value == "open")
-                    {
+                    if let Some(destination)=target.activated(action.as_deref()) {
                         if let Some(window) = handle.get_webview_window("main") {
                             let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
-                            let _ = window.emit("apheka:notification-open", &target);
+                            let _ = window.emit("apheka:notification-open", &destination);
                         }
                     }
                     Ok(())
@@ -120,6 +130,17 @@ pub async fn send_workspace_notification(
 mod tests {
     use super::*;
     #[test]
+    fn explicit_action_only_and_closed_routes() {
+        let t:NotificationTarget=serde_json::from_str(r#"{"kind":"study","id":"token","action":"start-break"}"#).unwrap();
+        assert!(t.validate().is_ok());
+        assert!(t.activated(None).unwrap().action.is_none());
+        assert!(t.activated(Some("open")).unwrap().action.is_none());
+        assert!(t.activated(Some("execute")).unwrap().action.is_some());
+        assert!(t.activated(Some("dismiss")).is_none());
+        let bad:NotificationTarget=serde_json::from_str(r#"{"kind":"habits","id":"token","action":"start-break"}"#).unwrap();
+        assert!(bad.validate().is_err());
+    }
+    #[test]
     fn rejects_missing_target_and_arbitrary_route() {
         assert!(
             serde_json::from_str::<NotificationTarget>(r#"{"kind":"javascript","id":"x"}"#)
@@ -128,21 +149,21 @@ mod tests {
         assert!(NotificationTarget {
             kind: TargetKind::Task,
             id: None,
-            date: None
+            date: None, action: None
         }
         .validate()
         .is_err());
         assert!(NotificationTarget {
             kind: TargetKind::Event,
             id: Some("e".into()),
-            date: Some("2026-11-05".into())
+            date: Some("2026-11-05".into()), action: None
         }
         .validate()
         .is_ok());
         assert!(NotificationTarget {
             kind: TargetKind::Event,
             id: Some("e".into()),
-            date: Some("bad-date".into())
+            date: Some("bad-date".into()), action: None
         }
         .validate()
         .is_err());

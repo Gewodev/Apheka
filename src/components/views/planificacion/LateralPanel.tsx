@@ -1,7 +1,9 @@
+import SessionTaskLink from '../../ui/SessionTaskLink';
 import {useAppSlice} from "../../../store/AppContext";
 import { sessionLinkUnavailable } from '../../../lib/linkEligibility';
 import { readFeatured, hydrateFeatured, setFeaturedEvent, FEATURED_CHANGED } from '../../../lib/featuredEvent';
-import React from 'react';
+import React,{useRef} from 'react';
+import {useDialogFocus} from '../../../hooks/useDialogFocus';
 import { X, Calendar, CalendarPlus, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe, Play, Pencil, Check, Folder } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -35,6 +37,7 @@ interface LateralPanelProps {
 export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onSelectSession, onFileMoved }: LateralPanelProps) {
   const { settings, tasks } = useAppSlice(["settings","tasks"]);
   const tf = settings?.timeFormat;
+  const panelRef=useRef<HTMLDivElement>(null);useDialogFocus(panelRef,!!item,onClose);
   if (!item) return null;
 
   return (
@@ -44,7 +47,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
         onClick={onClose}
       />
 
-      <div className="bento-card planner-day-panel" role="dialog" aria-modal="true" aria-label="Detalle del planificador"
+      <div ref={panelRef} className="bento-card planner-day-panel" role="dialog" aria-modal="true" aria-label="Detalle del planificador"
         style={{
           position: 'fixed',
           top: 0,
@@ -98,7 +101,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             <TaskDetails item={item} onViewTask={onViewTask} />
           )}
           {item.type === 'plansession' && (
-            <PlanSessionDetails item={item} onEdit={onEditPlanSession} />
+            <PlanSessionDetails item={item} onEdit={onEditPlanSession} onClose={onClose}/>
           )}
         </div>
       </div>
@@ -574,7 +577,7 @@ function LinkRow({ icon, label, name, color, active, onClick, title }: { icon: R
   );
 }
 
-function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'plansession'}>, onEdit?: (session:any)=>void }) {
+function PlanSessionDetails({ item, onEdit,onClose }: { item: Extract<SelectedItem, {type: 'plansession'}>, onEdit?: (session:any)=>void,onClose:()=>void }) {
   const { session } = item;
   const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification } = useAppSlice(["settings","courses","linkPlannedSessionToTimer","setNavigateTo","navigateToCourse","activeTaskId","addNotification"]);
   const tf = settings?.timeFormat;
@@ -690,7 +693,7 @@ function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {typ
           </div>
         );
       })()}
-<div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingBottom: 8 }}>
+<SessionTaskLink taskId={session.taskId} onOpen={onClose}/><div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingBottom: 8 }}>
           <button
             onClick={start} disabled={!!unavailable} className="workspace-session-start"
             title={activeTaskId ? 'Cambiar de la tarea actual a esta sesión' : 'Vincular al temporizador y abrir Estudio'}

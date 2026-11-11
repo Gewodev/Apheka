@@ -92,14 +92,18 @@ export function assessTasks(tasks:Task[],context:Context={}):Map<string,TaskAsse
 
 /** Only currently eligible, near-best candidates may be suggested by local or remote decisions. */
 export function studyTaskCandidates(tasks:Task[],assessments:Map<string,TaskAssessment>,now=Date.now()):TaskAssessment[]{
- const ranked=tasks.filter(task=>taskIsActive(task)&&(!task.dueDate||(taskDeadline(task.dueDate)??-Infinity)>=now)).map(task=>assessments.get(task.id)).filter((a):a is TaskAssessment=>!!a).sort((a,b)=>b.score-a.score||a.taskId.localeCompare(b.taskId));
+ const ranked=tasks.filter(task=>taskIsActive(task)&&(!task.dueDate||(taskDeadline(task.dueDate)??-Infinity)>=now)&&(!(task.subtasks||[]).length||task.subtasks.some(s=>!s.done&&s.title.trim()))).map(task=>assessments.get(task.id)).filter((a):a is TaskAssessment=>!!a&&Number.isFinite(a.score)).sort((a,b)=>b.score-a.score||a.taskId.localeCompare(b.taskId));
  if(!ranked.length)return [];
- const best=ranked[0];return ranked.filter(a=>a.score>=best.score-12&&(!best.urgent||a.urgent)&&(!best.important||a.important)).slice(0,6);
+ const best=ranked[0];return ranked.filter(a=>a.score>=best.score-12&&(!best.urgent||a.urgent)&&(!best.important||a.important)).slice(0,24);
 }
 /** Draw only from a near-best band. Randomness helps decide, not defeat priorities. */
 export function chooseStudyTask(tasks:Task[],assessments:Map<string,TaskAssessment>,random=Math.random,now=Date.now(),recent:readonly string[]=[]):string|null{
- const pool=studyTaskCandidates(tasks,assessments,now);if(!pool.length)return null;
- const weights=pool.map(a=>Math.pow(a.score-(pool[pool.length-1]?.score||0)+8,2)*(recent.includes(a.taskId)?.25:1));
+ const candidates=studyTaskCandidates(tasks,assessments,now);if(!candidates.length)return null;
+ const fresh=candidates.filter(a=>!recent.includes(a.taskId)),other=candidates.filter(a=>a.taskId!==recent[0]);
+ const pool=fresh.length?fresh:other.length?other:candidates;
+ const byId=new Map(tasks.map(task=>[task.id,task])),lastCourse=byId.get(recent[0])?.course;
+ const differentCourse=!!lastCourse&&pool.some(a=>byId.get(a.taskId)?.course!==lastCourse);
+ const weights=pool.map(a=>Math.exp((a.score-candidates[0].score)/10)*(differentCourse&&byId.get(a.taskId)?.course===lastCourse ? .72 : 1)*(byId.get(a.taskId)?.status==='progreso'?1.08:1));
  const total=weights.reduce((a,b)=>a+b,0),value=random(),draw=clamp(Number.isFinite(value)?value:0,0,1-Number.EPSILON)*total;
  let accumulated=0;for(let i=0;i<pool.length;i++){accumulated+=weights[i];if(draw<accumulated)return pool[i].taskId;}return pool[pool.length-1].taskId;
 }

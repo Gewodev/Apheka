@@ -1,0 +1,11 @@
+import React,{useState} from 'react';
+import {CalendarDays,Keyboard} from 'lucide-react';
+import {APP_COMMANDS,APP_COMMAND_EVENT} from './AppCommandsPanel';
+import {readScheduleShortcut,saveScheduleShortcut,SCHEDULE_SHORTCUTS,SCHEDULE_COMMAND_EVENT} from '../../lib/scheduleShortcut';
+export default function CommandsSettings(){const [shortcut,setShortcut]=useState(readScheduleShortcut);return <section className="settings-commands">
+ <div className="bento-card" data-settings-title="Horario rápido"><h3><CalendarDays size={18}/>Horario rápido</h3><p>Consulta tu horario en un panel lateral sin salir de lo que estás haciendo. El mismo atajo vuelve a ocultarlo.</p>
+ <label className="command-shortcut-field">Abrir u ocultar horario<select aria-label="Atajo del horario" value={shortcut} onChange={e=>{saveScheduleShortcut(e.target.value);setShortcut(e.target.value);}}>{SCHEDULE_SHORTCUTS.map(s=><option key={s}>{s}</option>)}</select></label>
+ <button type="button" className="btn-secondary" onClick={()=>window.dispatchEvent(new Event(SCHEDULE_COMMAND_EVENT))}><CalendarDays size={15}/>Abrir horario</button><p className="command-help">Se abre dentro de APHEKA. No crea otra ventana nativa ni modifica el horario. El atajo se omite mientras escribes o hay otro diálogo abierto.</p></div>
+ <div className="bento-card" data-settings-title="Acciones de la app"><h3><Keyboard size={18}/>Acciones de la app</h3><p>Abre un panel independiente con Ctrl+Mayús+P. Al crear o buscar, puedes elegir el curso.</p><div className="settings-command-list">{APP_COMMANDS.map(([id,label])=><button key={id} onClick={()=>window.dispatchEvent(new CustomEvent(APP_COMMAND_EVENT,{detail:id}))}>{label}<span>Abrir</span></button>)}</div></div>
+ <div className="bento-card" data-settings-title="Atajos del espacio de trabajo"><h3><Keyboard size={18}/>Atajos del espacio de trabajo</h3><dl className="command-reference">{[['Panel de comandos','Ctrl+Mayús+P'],['Buscar y captura rápida','Ctrl+K / Ctrl+Espacio'],['Mostrar u ocultar menú','Ctrl+B'],['Pantalla completa','F11'],['Cerrar diálogo o salir de pantalla completa','Esc']].map(([label,key])=><div key={label}><dt>{label}</dt><dd><kbd>{key}</kbd></dd></div>)}</dl></div>
+ </section>;}

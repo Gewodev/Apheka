@@ -223,7 +223,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
         onMouseLeave={handleEdgeLeave}
         style={{
           position: 'absolute',
-          right: isOpen ? 'min(50vw, 680px)' : 0,
+          right: isOpen ? 'min(580px, calc(100% - 16px))' : 0,
           top: 0, bottom: 0,
           width: 14,
           zIndex: isOpen ? 25 : 45,
@@ -241,7 +241,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             pointerEvents: (pillState || isOpen) ? 'auto' : 'none',
           }}
         >
-          <button data-ui-control="" onClick={handlePillClick}
+          <button data-ui-control="" className="analytics-edge-handle" aria-label={isOpen?'Ocultar estadísticas':'Mostrar estadísticas'} onClick={handlePillClick}
             style={{
               width: 32, height: 72,
               borderRadius: '10px 0 0 10px',
@@ -258,14 +258,14 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
               boxShadow: `-6px 0 24px rgba(0,0,0,0.25), 0 0 16px var(--accent-glow)`,
               transition: 'all 250ms',
             }}
-            className="hover:text-white hover:brightness-125">
+            >
             <ChevronRight size={16} style={{ transform: `rotate(${isOpen ? 180 : 0}deg)`, transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)' }} />
           </button>
         </motion.div>
       </div>
 
       {/* ── Drawer panel ── */}
-      <motion.div className="analytics-drawer"
+      <motion.div className="analytics-drawer" data-open={isOpen}
         initial={false}
         animate={{ x: isOpen ? 0 : 'calc(100% + 16px)' }}
         transition={{ duration:.2,ease:[.16,1,.3,1] }}
@@ -389,16 +389,16 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 </Section>
 
                 <Section>
-                  <SectionTitle icon={TrendingUp}>Duración media por hora · minutos</SectionTitle>
+                  <SectionTitle icon={TrendingUp}>Ritmo por hora · duración y enfoque</SectionTitle>
                   <ChartContainer>
                     <ResponsiveContainer debounce={80} width="100%" height={164}>
                       <AreaChart data={hourData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                         <XAxis dataKey="hour" tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} interval={3} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="minutes" tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} unit="m"/><YAxis yAxisId="focus" orientation="right" domain={[0,100]} tick={{fontSize:10,fill:chartTextColor}} axisLine={false} tickLine={false} unit="%" width={36}/>
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Area isAnimationActive={false} connectNulls={false} dot={{ r: 2 }} type="linear" dataKey="efficiency" name="Enfoque %" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} strokeWidth={2} />
-                        <Area isAnimationActive={false} connectNulls={false} dot={{ r: 2 }} type="linear" dataKey="avgDuration" name="Duración prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area isAnimationActive={false} connectNulls={false} dot={false} yAxisId="focus" type="monotone" dataKey="efficiency" name="Enfoque %" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} strokeWidth={2} />
+                        <Area isAnimationActive={false} connectNulls={false} dot={false} yAxisId="minutes" type="monotone" dataKey="avgDuration" name="Duración prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </ChartContainer>
@@ -436,27 +436,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
               <TabContent tabId="tasks">
                 <Section>
                   <SectionTitle icon={Target}>Estado de las tareas</SectionTitle>
-                  <ChartContainer height={150}>
-                    <ResponsiveContainer debounce={80} width="100%" height={150}>
-                      <BarChart data={funnelData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: chartTextColor }} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: chartTextColor }} axisLine={false} tickLine={false} width={80} />
-                        <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Bar isAnimationActive={false} dataKey="value" name="Tareas" radius={[0, 4, 4, 0]} maxBarSize={26}>
-                          {funnelData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 5 }}>
-                    {funnelData.map(s => (
-                      <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
-                        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{s.name}: {s.value}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="analytics-status-summary"><header><strong>{tasks.length}</strong><span>tareas registradas</span></header><div className="analytics-status-track" role="img" aria-label={funnelData.slice(1).map(s=>`${s.name}: ${s.value}`).join(', ')}>{funnelData.slice(1).filter(s=>s.value).map(s=><span key={s.name} style={{width:`${s.value/Math.max(1,tasks.length)*100}%`,background:s.color}} title={`${s.name}: ${s.value}`}/>)}</div><dl>{funnelData.slice(1).map(s=><div key={s.name}><dt><i style={{background:s.color}}/>{s.name}</dt><dd>{s.value}<small>{Math.round(s.value/Math.max(1,tasks.length)*100)}%</small></dd></div>)}</dl></div>
                 </Section>
 
                 <Section>

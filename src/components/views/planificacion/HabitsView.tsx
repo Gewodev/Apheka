@@ -1,3 +1,4 @@
+import HabitModes from './HabitModes';
 import {useAppSlice} from "../../../store/AppContext";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Pencil, Archive, RefreshCcw, ArchiveRestore, Check, X } from 'lucide-react';
@@ -16,8 +17,9 @@ export default function HabitsView() {
   const [newName, setNewName] = useState('');
   const newInputRef = useRef<HTMLInputElement>(null);
 
+  const [focusDate]=useState(()=>{const d=sessionStorage.getItem('apheka_habit_focus_date');sessionStorage.removeItem('apheka_habit_focus_date');return d&&/^\d{4}-\d{2}-\d{2}$/.test(d)?new Date(d+'T12:00:00'):startOfToday();});
   const today = startOfToday();
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(focusDate, { weekStartsOn: 1 });
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const activeHabits = useMemo(() => habits.filter(h => !h.isArchived).sort((a, b) => (a.order || 0) - (b.order || 0)), [habits]);
@@ -150,6 +152,7 @@ export default function HabitsView() {
 
       {/* Grid */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {!showArchived&&<HabitModes date={format(focusDate,'yyyy-MM-dd')}/>}
         <div style={{ borderRadius: 12, border: '1px solid var(--border-soft)', overflow: 'hidden', background: 'color-mix(in srgb, var(--bg-elevated) 50%, transparent)' }}>
           {/* Header row */}
           <div style={{ ...rowStyle, borderBottom: '2px solid var(--border-soft)', background: 'color-mix(in srgb, var(--bg-elevated) 70%, transparent)', position: 'sticky', top: 0, zIndex: 2 }}>

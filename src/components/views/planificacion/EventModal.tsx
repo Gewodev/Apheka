@@ -415,6 +415,7 @@ export default function EventModal({
     <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={event ? "Editar evento" : "Nuevo evento"} className="apheka-event-dialog"
         style={{
+          ...({'--event-accent':color} as React.CSSProperties),
           width: 700, maxWidth: 'calc(100vw - 32px)',
           maxHeight: '90vh',
           overflow: 'hidden',

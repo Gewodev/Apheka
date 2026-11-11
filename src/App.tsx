@@ -1,3 +1,4 @@
+import HabitReminderHost from './components/ui/HabitReminderHost';
 import NotificationNavigation from './components/NotificationNavigation';
 import {useCharvisEnabled, setCharvisEnabled} from './lib/charvisAvailability';
 import {ViewActivity} from './lib/viewActivity';
@@ -43,6 +44,8 @@ const CharvisSidebar = React.memo(lazy(() => import('./components/ui/CharvisSide
 const IA = React.memo(lazy(() => import('./components/views/IA')));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
+import SchedulePeek from './components/ui/SchedulePeek';
+import AppCommandsPanel from './components/ui/AppCommandsPanel';
 import DownloadManager from './components/ui/DownloadManager';
 import TrackArtworkDialog from './components/music/TrackArtworkDialog';
 import ImageContextMenu from './components/ui/ImageContextMenu';
@@ -700,6 +703,8 @@ export function AppContent() {
         <ReleaseNotice/>
         <MediaDownloadBridge/><GlobalPlayer sidebarCollapsed={isCollapsed} />
         <TrackArtworkDialog/>
+        <HabitReminderHost/><SchedulePeek onConfigure={()=>{try{localStorage.setItem('owa_show_schedule','true');}catch{}setActiveView('planificacion');window.dispatchEvent(new Event('apheka:open-schedule'));}}/>
+        <AppCommandsPanel onNavigate={view=>setActiveView(view)} onOpenNote={openNote} onOpenTask={openTask}/>
 
         {/* Contenedor global de avisos (react-hot-toast) — sin esto ningún toast() se muestra */}
         <Toaster

@@ -1,3 +1,4 @@
+import CourseNoteExcerpt from './cursos/CourseNoteExcerpt';
 import NoteEditorToolbar from '../ui/NoteEditorToolbar';
 import {useObservedSize} from '../../hooks/useObservedSize';
 import {applyEditorHighlight} from '../../lib/editorHighlight';
@@ -4026,7 +4027,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
                             return (
                               <SortableWrapper key={n.id} id={n.id}>
                                 {({ attributes, listeners, isDragging }) => (
-                                  <div className="course-note-block" data-highlighted={isHighlighted} style={{
+                                  <div className="course-note-block" data-note-id={n.id} data-expanded={isExpanded} data-highlighted={isHighlighted} style={{
+                                    ...({ '--note-accent': course.color } as React.CSSProperties),
                                     borderRadius: 12, position: 'relative',
                                     border: isHighlighted ? `1.5px solid #D4A017` : isCourseNote ? `1px solid ${course.color}25` : `1px solid var(--border-subtle)`,
                                     borderLeft: isHighlighted ? `3px solid #D4A017` : isCourseNote ? `3px solid ${course.color}50` : `1px solid var(--border-subtle)`,
@@ -4060,17 +4062,14 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       </>
                                     ) : (
                                       <>
-                                        <div className="course-note-summary"><NotebookPen size={15}/><span>{n.title?.trim() || 'Apunte sin título'}</span><ChevronRight size={14}/></div>
-                                        {/* Date display */}
-                                        {showOverviewNoteDates && (
-                                          <div style={{ padding: '8px 16px 0', fontSize: 11, fontWeight: 600, color: dateContrast(course.color, th), fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
-                                            {format(new Date(n.createdAt), "dd/MM/yy", { locale: es })}
-                           </div>
-                                         )}
                                          {/* -- COLLAPSED (preview) -- */}
-                                        <div className="course-note-excerpt" style={{ padding: showOverviewNoteDates ? '6px 16px 12px' : '12px 16px' }}>
-                                          <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
-                                            dangerouslySetInnerHTML={{ __html: n.content?.replace(/<img[^>]+style="([^"]*)"/g, (m: string, s: string) => m.replace(s, s + ';max-height:100px;width:auto') ) || '<span style="color:var(--text-muted);font-style:italic;font-size:12px">Vacío</span>' }} />
+                                        <CourseNoteExcerpt content={n.content}/>
+                                        <div className="course-note-meta">
+                                          {isHighlighted && <Star size={12} aria-label="Destacado" fill="currentColor"/>}
+                                          {showOverviewNoteDates && <time dateTime={n.createdAt}>{format(new Date(n.createdAt), 'dd MMM yyyy', {locale: es})}</time>}
+                                          <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setSelectedOverviewNoteId(n.id);setOverviewNoteEditMode(false);}}>
+                                            Leer apunte <ChevronRight size={13}/>
+                                          </button>
                                         </div>
                                       </>
                                     )}
@@ -7321,7 +7320,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
       )}
 
                 {showPlanModal && <CourseSessionDialog editing={!!planEditId} course={course} groups={groups} topics={parsedTopics}
-                  initialValue={{title:planTitle,date:planDate,startTime:planStartTime,durationMinutes:planDuration,intensity:planIntensity,type:planType,groupId:planGroupId,topicId:planTopicId,repeat:planRepeat,repeatDays:planRepeatDays,repeatUntil:planRepeatUntil}}
+                  initialValue={{taskId:plannedSessions.find(s=>s.id===planEditId)?.taskId,title:planTitle,date:planDate,startTime:planStartTime,durationMinutes:planDuration,intensity:planIntensity,type:planType,groupId:planGroupId,topicId:planTopicId,repeat:planRepeat,repeatDays:planRepeatDays,repeatUntil:planRepeatUntil}}
                   onClose={()=>setShowPlanModal(false)} onSave={draft=>{
                     const payload:Omit<PlannedSession,'id'|'createdAt'>={courseId:course.id,...draft,groupId:draft.groupId||undefined,topicId:draft.topicId||undefined,startTime:draft.startTime||undefined,completed:false,repeatDays:draft.repeat==='custom_days'?[...draft.repeatDays].sort():undefined,repeatUntil:draft.repeat!=='none'&&draft.repeatUntil?draft.repeatUntil:undefined};
                     if(planEditId){const {completed:_completed,...rest}=payload;updatePlannedSession(planEditId,rest);}else addPlannedSession(payload);

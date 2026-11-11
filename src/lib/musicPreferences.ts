@@ -44,7 +44,9 @@ function artistPreferences(preferences:Preferences,searches:MusicSearchMemory[],
   const add=(name:string,score:number)=>{if(!knownArtist(name)||score<=0)return;const key=artistKey(name),previous=artists.get(key);artists.set(key,{name:name.replace(/\s*-\s*Topic$/i,'').trim(),score:(previous?.score||0)+score});};
   for(const track of preferences.tracks){
     const index=recent.get(track.id),count=Math.max(0,preferences.playCounts?.[track.id]||0),minutes=Math.max(0,track.listenedTime||0)/60;
-    add(track.artist,(track.librarySaved!==false?1:0)+(track.isFavorite?6:0)+Math.min(6,Math.log2(1+minutes))+Math.min(4,Math.log2(1+count))+(index===undefined?0:3/Math.sqrt(index+1)));
+    const credits=track.artist.split(/[,;]|\s+(?:feat\.?|ft\.?|featuring|con|with)\s+/i).map(name=>name.trim()).filter(Boolean);
+    const score=(track.librarySaved!==false?2:0)+(track.isFavorite?6:0)+Math.min(6,Math.log2(1+minutes))+Math.min(4,Math.log2(1+count))+(index===undefined?0:3/Math.sqrt(index+1));
+    for(const credit of [...new Set(credits)])add(credit,score/Math.sqrt(Math.max(1,credits.length)));
   }
   for(const search of searches){const freshness=1/(1+Math.max(0,now-search.lastAt)/7776000000);for(const name of search.artists)add(name,.6*freshness*Math.min(3,Math.log2(1+search.count)));}
   return artists;

@@ -9,11 +9,13 @@ mod charvis_web;
 mod charvis_artifacts;
 mod charvis_vault;
 mod media_source;
+mod playlist_import;
 mod youtube_identity;
 
 
 mod external_open;
 mod workspace_pointer;
+mod floating_timer;
 mod rendering;
 mod release_notice;
 mod mcp;
@@ -814,6 +816,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             native_notifications::send_workspace_notification,
+            playlist_import::read_external_playlist,
             retire_legacy_media_windows,
             music_network::music_catalog_request, music_network::cancel_music_catalog_request,
             jev::jev_status, jev::jev_connect, jev::jev_disconnect, jev::jev_decide,
@@ -839,6 +842,7 @@ fn main() {
             detect_installed_browsers,
             open_url_in_browser,
             workspace_pointer::restore_workspace_pointer,
+            floating_timer::toggle_floating_timer, floating_timer::close_floating_timer,
             rendering::graphics_status, rendering::graphics_set_mode,
             download_yt_dlp,
         ])

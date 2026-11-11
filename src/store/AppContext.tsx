@@ -134,6 +134,9 @@ export interface NoteFolder {
 }
 
 export interface Habit {
+  metricKind?: 'water'|'exercise';
+  dailyGoal?: number;
+  amountOn?: Record<string,number>;
   id: string;
   name: string;
   completedOn: string[]; // Array of 'YYYY-MM-DD' date strings
@@ -352,6 +355,7 @@ export interface DailyPerformance {
 }
 
 export interface PlannedSession {
+  taskId?: string;
   id: string;
   courseId: string;
   date: string;           // YYYY-MM-DD
@@ -528,7 +532,7 @@ export interface AppContextType extends AppState {
   addEvent: (event: Omit<ScheduleEvent, 'id'>) => void;
   updateEvent: (id: string, updates: Partial<ScheduleEvent>) => void;
   deleteEvent: (id: string) => void;
-  addHabit: (name: string) => void;
+  addHabit: (name: string, options?: Pick<Habit, 'metricKind'|'dailyGoal'>) => void;
   updateHabit: (id: string, updates: Partial<Habit>) => void;
   deleteHabit: (id: string) => void;
   setHabits: Dispatch<SetStateAction<Habit[]>>;
@@ -2350,10 +2354,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // â”€â”€ HABITS â”€â”€
-  const addHabit = useCallback((name: string) => {
+  const addHabit = useCallback((name: string, options?: Pick<Habit, 'metricKind'|'dailyGoal'>) => {
     const newHabit: Habit = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
       name: name.trim(),
+      ...options,
       completedOn: [],
       order: habits.length,
     };

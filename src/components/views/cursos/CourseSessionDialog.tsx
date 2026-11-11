@@ -1,4 +1,6 @@
 import StudySessionControls from '../../ui/StudySessionControls';
+import {useAppSlice} from '../../../store/AppContext';
+import {taskLinkUnavailable} from '../../../lib/linkEligibility';
 import React, {useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronUp,ChevronDown,Minus, Plus, X} from 'lucide-react';
@@ -6,6 +8,7 @@ import {ChevronUp,ChevronDown,Minus, Plus, X} from 'lucide-react';
 import PlanSelectDropdown from '../../ui/PlanSelectDropdown';
 
 export type CourseSessionDraft = {
+  taskId?:string;
   title:string; date:string; startTime:string; durationMinutes:number; intensity:number;
   type:string; groupId:string; topicId:string; repeat:'none'|'daily'|'weekly'|'custom_days'; repeatDays:number[]; repeatUntil:string;
 };
@@ -15,6 +18,8 @@ export default function CourseSessionDialog({initialValue,editing,course,groups,
   onSave:(value:CourseSessionDraft)=>void; onClose:()=>void;
 }){
   const [draft,setDraft]=useState(initialValue),root=useRef<HTMLFormElement>(null),title=useRef<HTMLInputElement>(null);
+  const {tasks}=useAppSlice(['tasks']);
+  const taskOptions=tasks.filter(t=>t.course===course.name&&(!taskLinkUnavailable(t)||t.id===draft.taskId));
   const change=<K extends keyof CourseSessionDraft>(key:K,value:CourseSessionDraft[K])=>setDraft(previous=>({...previous,[key]:value}));
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;title.current?.focus({preventScroll:true});return()=>{if(previous?.isConnected)previous.focus({preventScroll:true});};},[]);
   const duration=(minutes:number)=>change('durationMinutes',Math.max(5,Math.min(240,Math.round(minutes/5)*5)));
@@ -25,7 +30,7 @@ export default function CourseSessionDialog({initialValue,editing,course,groups,
       onKeyDown={event=>{
         if(event.key==='Escape'){event.stopPropagation();onClose();}
         if(event.key!=='Tab'||!root.current?.contains(event.target as Node))return;
-        const fields=[...root.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')].filter(field=>field.getClientRects().length);
+        const fields=[...root.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)')].filter(field=>field.getClientRects().length);
         const first=fields[0],last=fields[fields.length-1];
         if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
         else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
@@ -34,6 +39,7 @@ export default function CourseSessionDialog({initialValue,editing,course,groups,
       <div className="course-session-fields">
         <label className="course-session-field">Título<input ref={title} required maxLength={240} value={draft.title} placeholder="Ej: Repasar capítulo 3" onChange={event=>change('title',event.target.value)}/></label>
         <StudySessionControls startTime={draft.startTime} duration={draft.durationMinutes} intensity={draft.intensity} onStart={value=>change('startTime',value)} onDuration={value=>change('durationMinutes',value)} onIntensity={value=>change('intensity',value)}/>
+        <label className="course-session-field">Tarea vinculada<select aria-label="Tarea de la sesión" value={draft.taskId||''} onChange={e=>change('taskId',e.target.value||undefined)}><option value="">Sin tarea vinculada</option>{taskOptions.map(task=><option key={task.id} value={task.id}>{task.title}{taskLinkUnavailable(task)?' · revisar fecha o estado':''}</option>)}</select></label>
         <div className="course-session-field"><span>Repetir</span><div className="course-session-presets" role="group" aria-label="Repetir sesión">{([['none','No repite'],['daily','Cada día'],['weekly','Cada semana'],['custom_days','Días propios']] as const).map(([value,label])=><button type="button" key={value} aria-pressed={draft.repeat===value} onClick={()=>change('repeat',value)}>{label}</button>)}</div>
           {draft.repeat==='custom_days'&&<div className="course-session-presets" role="group" aria-label="Días de repetición">{['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((day,index)=><button type="button" key={day} aria-label={day} aria-pressed={draft.repeatDays.includes(index)} onClick={()=>change('repeatDays',draft.repeatDays.includes(index)?draft.repeatDays.filter(value=>value!==index):[...draft.repeatDays,index])}>{['L','M','X','J','V','S','D'][index]}</button>)}</div>}
           {draft.repeat!=='none'&&<label className="course-session-until">Hasta<input type="date" aria-label="Repetir hasta" min={draft.date} value={draft.repeatUntil} onChange={event=>change('repeatUntil',event.target.value)}/></label>}

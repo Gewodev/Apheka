@@ -11,6 +11,9 @@ pub fn recover_after_timer_close(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         for delay in [80, 240] {
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            // A reopened timer owns the next focus cycle; an old close must not
+            // refocus its parent or change its cursor after recreation.
+            if app.get_webview_window("floating-timer").is_some() { continue; }
             if let Some(main) = app.get_webview_window("main") {
                 if main.is_visible().unwrap_or(false) && main.is_focused().unwrap_or(false) {
                     // Focus the content, not the top-level window: never raise the app.

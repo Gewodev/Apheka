@@ -15,7 +15,7 @@ export async function suggestTaskDuration(task:Task,assessment?:TaskAssessment):
 
 export async function suggestStudyTask(tasks:Task[],assessments:Map<string,TaskAssessment>):Promise<JevAdvice|null>{
  if(!isTauri())return null;
- const pool=studyTaskCandidates(tasks,assessments);
+ const pool=studyTaskCandidates(tasks,assessments).slice(0,6);
  if(!pool.length)return null;
  const status=await invoke<{configured:boolean}>('jev_status').catch(()=>({configured:false}));if(!status.configured)return null;
  const candidates=pool.map(row=>jevCandidate(tasks.find(task=>task.id===row.taskId)!,row));

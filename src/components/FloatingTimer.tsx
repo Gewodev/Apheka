@@ -2,6 +2,7 @@ import { FLOATING_FONTS } from '../lib/floatingFonts';
 import { useState, useEffect, useRef } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { DigitSVG, ColonSVG } from './LEDDigits';
 import { ANIMATIONS } from './FloatingAnimations';
 
@@ -44,6 +45,8 @@ export default function FloatingTimer() {
   const [hideInFocus, setHideInFocus] = useState(false);
   const [animType, setAnimType] = useState('plant');
   const [containerHovered, setContainerHovered] = useState(false);
+  const [closeError, setCloseError] = useState('');
+  const closing = useRef(false);
   const customColors = useRef({ focus: '#E11D48', brk: '#10B981', longBrk: '#F59E0B', chrono: '#3B82F6' });
   const lastSync = useRef<TimerSync & { ts: number }>({
     sessionTime: 0, isTimerActive: false, isRest: false,
@@ -153,6 +156,15 @@ export default function FloatingTimer() {
     try { await getCurrentWindow().startDragging(); } catch {}
   }
 
+  async function closeTimer() {
+    if (closing.current) return;
+    closing.current = true;
+    setCloseError('');
+    try { await invoke('close_floating_timer'); }
+    catch { setCloseError('No se pudo cerrar. Pulsa la X para reintentar.'); }
+    finally { closing.current = false; }
+  }
+
   const isActive = lastSync.current.isTimerActive;
   const isPomodoro = lastSync.current.sessionType === 'pomodoro';
   const hideTime = hideInFocus && isActive;
@@ -179,10 +191,12 @@ export default function FloatingTimer() {
         position: 'relative', gap: 0,
       }}
     >
-      <span
+      <button type="button"
         className="close-btn"
-        onClick={(e) => { e.stopPropagation(); getCurrentWindow().close(); }}
-        title="Cerrar timer"
+        aria-label="Cerrar timer"
+        onMouseDown={e => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); void closeTimer(); }}
+        title={closeError || 'Cerrar timer'}
         style={{
           position: 'absolute', top: 6, right: 6, zIndex: 20,
           width: 22, height: 22, borderRadius: 5,
@@ -190,7 +204,7 @@ export default function FloatingTimer() {
           color: 'rgba(255,255,255,0.5)', cursor: 'pointer', lineHeight: 1,
           background: 'transparent',
           border: 'none',
-          opacity: containerHovered ? 1 : 0,
+          opacity: containerHovered || closeError ? 1 : 0,
           transition: 'opacity 200ms, background 150ms, color 150ms',
         }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.8)'; e.currentTarget.style.color = '#fff'; }}
@@ -200,7 +214,8 @@ export default function FloatingTimer() {
           <line x1="4" y1="4" x2="12" y2="12" />
           <line x1="12" y1="4" x2="4" y2="12" />
         </svg>
-      </span>
+      </button>
+      {closeError && <span role="alert" style={{position:'absolute',bottom:2,left:4,right:4,fontSize:9,color:'#fca5a5',textAlign:'center'}}>{closeError}</span>}
 
       <div style={{ height: 18, display: 'flex', alignItems: 'center', marginTop: -10, marginBottom: 4 }}>
         {!showAnimation && !pomodoroComplete && (

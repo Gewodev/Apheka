@@ -82,7 +82,7 @@ export async function claimSharedSlot(key: string, cooldownMs: number = 3_600_00
   }
 }
 
-export type NotificationTarget={kind:'task'|'event'|'session'|'study'|'tasks'|'settings'|'music'|'downloads';id?:string;date?:string};
+export type NotificationTarget={kind:'task'|'event'|'session'|'study'|'tasks'|'settings'|'music'|'downloads'|'habits';id?:string;date?:string;action?:'start-break'|'start-session'};
 export async function sendNativeNotification(title: string, body: string,target:NotificationTarget={kind:'study'}): Promise<void> {
   try {
     const ok = await requestNativePermission();
@@ -130,10 +130,17 @@ const pick = (arr: string[]): string => arr[Math.floor(Math.random() * arr.lengt
 
 // ─── Notificaciones de sesiones de estudio ───
 
+export const STUDY_NOTICE_KEY='apheka_study_notice';
+export const STUDY_NOTICE_PENDING='apheka_study_notice_pending';
+export function createStudyNotice(action:'start-break'|'start-session'):NotificationTarget {
+ const target:NotificationTarget={kind:'study',action,id:crypto.randomUUID()};
+ try{sessionStorage.setItem(STUDY_NOTICE_KEY,JSON.stringify(target));}catch{}
+ return target;
+}
 export function notifySessionComplete(minutes: number): void {
   sendNativeNotification(
     'Sesion completada',
-    `Has completado ${minutes} minutos de trabajo dedicado. Toma un descanso merecido.`
+    `Has completado ${minutes} minutos de trabajo dedicado. Puedes guardar este bloque e iniciar el descanso.`,createStudyNotice('start-break')
   );
 }
 
@@ -147,7 +154,7 @@ export function notifyGoalReached(hours: number): void {
 export function notifyBreakOver(): void {
   sendNativeNotification(
     'Descanso finalizado',
-    'Tu pausa ha terminado. Inicia tu siguiente bloque de estudio con mente fresca.'
+    'Tu pausa ha terminado. Inicia tu siguiente bloque de estudio con mente fresca.',createStudyNotice('start-session')
   );
 }
 

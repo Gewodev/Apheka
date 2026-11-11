@@ -1,7 +1,7 @@
 import {playStudyAlarm} from '../../lib/studyAlarm';
 import {useAppSlice} from "../../store/AppContext";
 import SessionFinishControl from '../ui/SessionFinishControl';
-import { useWindowFullscreen, windowFullscreen, resumeFullscreenInput } from '../../hooks/useWindowFullscreen';
+import { useWindowFullscreen, windowFullscreen } from '../../hooks/useWindowFullscreen';
 import {clockValue} from '../../lib/analogClock';
 import WorkspaceClock from '../ui/WorkspaceClock';
 import { deadlineForClock } from '../../lib/timerSchedule';
@@ -19,12 +19,11 @@ import {
   Check, Minus, Brain, Volume2, BookOpen, ArrowUpRight, Trash2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useApp, StudySession } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { notifySessionComplete, notifyBreakOver, sendNativeNotification } from '../../lib/notifications';
+import { notifySessionComplete, notifyBreakOver, sendNativeNotification, STUDY_NOTICE_KEY, STUDY_NOTICE_PENDING } from '../../lib/notifications';
 import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 import PlanSelectDropdown from '../ui/PlanSelectDropdown';
@@ -225,6 +224,20 @@ export default function Estudio() {
     setSessionTime(0);
   }, [evalSessionId, sessionType, isRest, updateStudySession, addStudySession, incrementPomodoroSessions, setIsRest, setSessionTime, setIsTimerActive, setShowRestPrompt]);
 
+  // A toast can execute once, only while the exact phase it describes is still valid.
+  const noticeHandlerRef=useRef<()=>void>(()=>{});
+  noticeHandlerRef.current=()=>{try{
+    const raw=sessionStorage.getItem(STUDY_NOTICE_PENDING);if(!raw)return;
+    sessionStorage.removeItem(STUDY_NOTICE_PENDING);
+    const target=JSON.parse(raw),expected=JSON.parse(sessionStorage.getItem(STUDY_NOTICE_KEY)||'null');
+    if(!expected||expected.id!==target.id||expected.action!==target.action)return;
+    sessionStorage.removeItem(STUDY_NOTICE_KEY);
+    if(sessionType!=='pomodoro'||isRest||isTimerActive)return;
+    if(target.action==='start-break'&&sessionTime>=settings.pomodoroTime)handleEvalAndStartRest({});
+    else if(target.action==='start-session'&&sessionTime===0)setIsTimerActive(true);
+  }catch{}};
+  useEffect(()=>{const run=()=>noticeHandlerRef.current();run();window.addEventListener('apheka:study-notice',run);return()=>window.removeEventListener('apheka:study-notice',run);},[]);
+
   // No restStartRef needed — sessionTime is always reset to 0 when rest starts
 
   // Persistent chrono round tracking (survives unmount/remount)
@@ -345,7 +358,6 @@ export default function Estudio() {
       if(settings.soundEffects)playStudyAlarm('focus');
       setIsTimerActive(false);
       if (settings.notifications !== false && (settings as any).event_pomodoro !== false) {
-        sendNativeNotification('Sesión completada', 'Buen trabajo. Evalúa tu sesión.');
         notifySessionComplete(settings.pomodoroTime / 60);
       }
       pendingSessionRef.current = {
@@ -751,35 +763,13 @@ export default function Estudio() {
             <button onClick={() => { void windowFullscreen.toggle(); }} disabled={fullscreenBusy} aria-busy={fullscreenBusy} aria-pressed={isFullscreen} aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: fullscreenBusy ? 'wait' : 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={isFullscreen ? 'Salir de pantalla completa · Esc / F11' : 'Pantalla completa · F11'}>
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
-            {/* Floating timer toggle — show/hide always-on-top floating timer window */}
+            {/* The native coordinator confirms destruction before allowing recreation. */}
             <button className="hidden md:block" onClick={async () => {
               if(floatingToggleBusy.current)return;
               floatingToggleBusy.current=true;
               try {
-              const existing = await WebviewWindow.getByLabel('floating-timer');
-              if (existing) {
-                const visible = await existing.isVisible();
-                await existing.setSkipTaskbar(true);
-                if (visible) { await existing.hide(); await getCurrentWebviewWindow().setFocus(); await resumeFullscreenInput(true); } else { await existing.show(); await existing.setFocus(); }
-                return;
-              }
-              const win = new WebviewWindow('floating-timer', {
-                url: '/',
-                title: 'Timer',
-                width: 156, height: 112,
-                resizable: false,
-                decorations: false,
-                transparent: true,
-                alwaysOnTop: true,
-                skipTaskbar: true,
-              });
-              win.setShadow(false).catch(() => {});
-              await new Promise<void>((resolve,reject)=>{
-                const timeout=setTimeout(()=>resolve(),5000);
-                void win.once('tauri://created',()=>{clearTimeout(timeout);resolve();});
-                void win.once('tauri://error',()=>{clearTimeout(timeout);reject(new Error('No se pudo crear la ventana'));});
-              });
-              } catch {addNotification('No se pudo abrir el temporizador flotante.','error');} finally {floatingToggleBusy.current=false;}
+                await invoke<boolean>('toggle_floating_timer');
+              } catch {addNotification('No se pudo abrir o cerrar el contador. Vuelve a intentarlo.','error');} finally {floatingToggleBusy.current=false;}
             }} style={{
               padding: 8, borderRadius: '50%', background: 'var(--bg-deep)',
               border: '1px solid var(--border-soft)', color: 'var(--text-secondary)',

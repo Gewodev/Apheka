@@ -261,11 +261,14 @@ export default function Planificacion() {
 
   try { useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]); } catch { /* cuota */ }
   useEffect(() => { localStorage.setItem('owa_show_schedule', String(showScheduleBuilder)); }, [showScheduleBuilder]);
+  useEffect(()=>{const open=()=>setShowScheduleBuilder(true);window.addEventListener('apheka:open-schedule',open);return()=>window.removeEventListener('apheka:open-schedule',open);},[]);
+  useEffect(()=>{const open=()=>{try{sessionStorage.removeItem('apheka_create_event');}catch{}setModalDefaults({date:format(new Date(),'yyyy-MM-dd')});setEditingEvent(null);setOccurrenceDate(null);setShowEventModal(true);};if(sessionStorage.getItem('apheka_create_event')==='1')open();window.addEventListener('apheka:create-event',open);return()=>window.removeEventListener('apheka:create-event',open);},[]);
   useEffect(() => { localStorage.setItem('owa_show_habits', String(showHabits)); }, [showHabits]);
 
   // Compuerta anti-borrado: bloquea todo guardado hasta que la primera carga
   // termina. Sin esto, el estado inicial vacío podía pisar el almacén real
   // cuando IndexedDB tardaba más que el retardo de guardado (400 ms).
+  useEffect(()=>{const open=()=>{if(sessionStorage.getItem('apheka_open_habits')){sessionStorage.removeItem('apheka_open_habits');setShowHabits(true);setShowScheduleBuilder(false);}};open();window.addEventListener('apheka:open-habits',open);return()=>window.removeEventListener('apheka:open-habits',open);},[]);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -1272,22 +1275,25 @@ export default function Planificacion() {
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
                       const linkedTaskIds = new Set(dayEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
                       const dayTasks=tasks.filter(t=>{if(!t.dueDate)return false;if(linkedTaskIds.has(t.id))return false;return (t.dueDate||'').slice(0,10)===iso});
+                      const daySessions=getPlannedSessionsForDate(iso),shownSessions=daySessions.slice(0,2),shownEvents=dayEvs.slice(0,3-shownSessions.length),shownTasks=dayTasks.slice(0,3-shownSessions.length-shownEvents.length);
+                      const hiddenItems=daySessions.length+dayEvs.length+dayTasks.length-shownSessions.length-shownEvents.length-shownTasks.length;
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
                           onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks, sessions: getPlannedSessionsForDate(iso) }); }}
-                          style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:'transparent', opacity, transition:'background 200ms', position:'relative' }}
+                          style={{ height:164, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:'transparent', opacity, transition:'background 200ms', position:'relative' }}
                           onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                           onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
                         >
                           <div style={{ width:28,height:28,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10, fontSize:13,fontWeight:tod?700:500, background:tod?'var(--accent)':'transparent', color:tod?'#fff':'var(--text-primary)', fontFamily:'var(--font-primary)' }}>{format(day,'d')}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden' }}>
-                            {dayEvs.slice(0,3).map((ev,ei)=>{
+                            {shownSessions.map(s=><button type="button" className="month-study-session" key={s.id} title={s.title} style={{'--session-color':courses.find(c=>c.id===s.courseId)?.color||'var(--accent)'} as React.CSSProperties} onClick={e=>{e.stopPropagation();setSelectedItem({type:'plansession',session:s});}}><span aria-hidden="true">◷</span><strong>{s.title||'Sesión de estudio'}</strong><small>{s.startTime||s.durationMinutes+' min'}</small></button>)}
+                            {shownEvents.map((ev,ei)=>{
                               const evTask = (ev as PlanEvent).taskId ? tasks.find(t => t.id === (ev as PlanEvent).taskId) : null;
                               return <div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}{evTask ? <span style={{opacity:0.55,fontWeight:500}}> + {evTask.title}</span> : ''}</div>;
                             })}
-                            {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600,opacity:t.status==='completado'?0.5:1,textDecoration:t.status==='completado'?'line-through':'none' }}>{t.status==='completado'?'✓ ':''}{t.title}</div>)}
-                            {(dayEvs.length+dayTasks.length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length-6} más</div>}
+                            {shownTasks.map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600,opacity:t.status==='completado'?0.5:1,textDecoration:t.status==='completado'?'line-through':'none' }}>{t.status==='completado'?'✓ ':''}{t.title}</div>)}
+                            {hiddenItems>0&&<div style={{fontSize:10,color:'var(--text-muted)',marginTop:2}}>+{hiddenItems} más</div>}
                           </div>
                         </div>
                       );
