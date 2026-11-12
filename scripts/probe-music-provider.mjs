@@ -1,0 +1,3 @@
+import {Innertube,Log,YTNodes} from 'youtubei.js';Log.setLevel(Log.Level.ERROR);
+const yt=await Innertube.create({lang:'es',location:'PE',retrieve_player:false,generate_session_locally:true});
+for(const type of ['all','song']){const r=await yt.music.search('Antologia',{type});const nodes=r.page.contents_memo?.getType(YTNodes.MusicResponsiveListItem)||[];console.log(JSON.stringify({type,nodes:nodes.slice(0,6).map(n=>({type:n.item_type,title:n.title||n.name,id:n.id,artists:n.artists,cover:n.thumbnails?.at(-1),duration:n.duration,endpoint:n.endpoint?.payload})),continuation:r.has_continuation,correction:r.did_you_mean?.corrected_query?.toString()},null,2));}

@@ -1,0 +1,12 @@
+{
+  "audioProgressUpdates": 20,
+  "homeDuringAudioProgress": {
+    "commits": 20,
+    "renderMs": 225.9000000357628
+  },
+  "homeIdle2300ms": {
+    "commits": 4,
+    "renderMs": 46.40000003576279
+  },
+  "course400msPolls": 1
+}

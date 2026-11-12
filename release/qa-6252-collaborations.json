@@ -1,0 +1,1785 @@
+{
+  "requests": 7,
+  "results": {
+    "artist": {
+      "id": "UCJa2FF4TUB13Mm0GurZAqog",
+      "name": "Grupo Frontera",
+      "artist": "",
+      "cover": "https://yt3.googleusercontent.com/I5RtcNKbxNoAgs5We1ty-YDP5lmV1yfR5j7VTj44avL_PSm_lCmE6ade5HsaHaihkFTKHbVn=w600-h600-l90-rj",
+      "listeners": 76500000,
+      "kind": "artist"
+    },
+    "queries": [
+      {
+        "query": "Grupo Frontera",
+        "songs": [
+          {
+            "id": "Z7HEr6opkms",
+            "title": "Estos Celos (En Vivo)",
+            "artist": "Grupo Frontera",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "En Vivo, Vol.1",
+            "albumId": "MPREb_Kfx1dL2e06X",
+            "duration": 222,
+            "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 8900000
+          },
+          {
+            "id": "1z7FKB4VfwA",
+            "title": "Ex de Verdad",
+            "artist": "Grupo Frontera",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "Ex de Verdad",
+            "albumId": "MPREb_wXi1CKsle9h",
+            "duration": 187,
+            "cover": "https://yt3.googleusercontent.com/LEsw5OcIqsu_ZmUFvW0DEKyZZz-dH-pDHlYCsejVf6zXKJ7VnYmUkEUZKPhv9JgH-o_T37AQ2NyqcQ=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 7700000
+          },
+          {
+            "id": "Qa4l4eLxb3Q",
+            "title": "EL AMOR DE SU VIDA",
+            "artist": "Grupo Frontera, Grupo Firme",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog",
+              "UCJKREB2c3dO8dgdo8FtdO_A"
+            ],
+            "album": "El Comienzo",
+            "albumId": "MPREb_BLUnel72lUI",
+            "duration": 166,
+            "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 1507000000
+          },
+          {
+            "id": "_wwskYy5lyM",
+            "title": "Ya No Vuelvo Atrás",
+            "artist": "Grupo Frontera MX",
+            "artistId": "UCf4tzgipOOS80QFzHlff2gw",
+            "artistIds": [
+              "UCf4tzgipOOS80QFzHlff2gw"
+            ],
+            "album": "Ya No Vuelvo Atrás",
+            "albumId": "MPREb_CPjViNrlxgK",
+            "duration": 226,
+            "cover": "https://yt3.googleusercontent.com/aFs_Pj_CqllHYAcfjaAfV6cDXsre8qiVuUSD08G3W7Ep0iJqKjXncRa6-xuoYrYuaNoBjLpQ-swOu5g=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 9500
+          },
+          {
+            "id": "54QuijLJ2jk",
+            "title": "La Pareja Ideal (En Vivo)",
+            "artist": "Grupo Frontera, Los Dorados",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog",
+              "UCb35mQ8r5i60gsoGQ7DLc8Q"
+            ],
+            "album": "En Vivo, Vol.1",
+            "albumId": "MPREb_Kfx1dL2e06X",
+            "duration": 255,
+            "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 29000000
+          },
+          {
+            "id": "xoLfYjX5nzs",
+            "title": "un x100to",
+            "artist": "Grupo Frontera, Bad Bunny",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog",
+              "UCiY3z8HAGD6BlSNKVn2kSvQ"
+            ],
+            "album": "El Comienzo",
+            "albumId": "MPREb_BLUnel72lUI",
+            "duration": 195,
+            "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 1357000000
+          },
+          {
+            "id": "VwKrN5Wyvno",
+            "title": "Sigue Lloviendo",
+            "artist": "Grupo Frontera MX",
+            "artistId": "UCf4tzgipOOS80QFzHlff2gw",
+            "artistIds": [
+              "UCf4tzgipOOS80QFzHlff2gw"
+            ],
+            "album": "Sigue Lloviendo",
+            "albumId": "MPREb_c4AJVROfVfb",
+            "duration": 245,
+            "cover": "https://yt3.googleusercontent.com/e81FoumR89zmIfPlF7Wp2G6vJkH2RNk9oVmNuowxLyi86FfXntM2ttbD5sAqHMSuZyenH705U8xXEcQ7=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 3500
+          },
+          {
+            "id": "fPczdTA1xU0",
+            "title": "COQUETA",
+            "artist": "Fuerza Regida, Grupo Frontera",
+            "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "artistIds": [
+              "UC0kxNxFQCK6d2spPz5Sme7Q",
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "MALA MÍA",
+            "albumId": "MPREb_wj4baccFDOK",
+            "duration": 242,
+            "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 863000000
+          },
+          {
+            "id": "aFLyZUmMU4A",
+            "title": "Dame Un Chance (La Cumbia Bélica)",
+            "artist": "Luis R Conriquez, Grupo Frontera",
+            "artistId": "UCm7mbvc5QOn5JzkeCrk-wdw",
+            "artistIds": [
+              "UCm7mbvc5QOn5JzkeCrk-wdw",
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "Dame Un Chance (La Cumbia Bélica)",
+            "albumId": "MPREb_EHUliqQpPQF",
+            "duration": 181,
+            "cover": "https://yt3.googleusercontent.com/E2yeUPPBfdXkwR3Ds2UjeuwSxRKfIMotT4jZKS8z0jK_A1dxmqZ6qyH3jdRDZ0_1hepOdoaNfUJJW10T=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 59000000
+          },
+          {
+            "id": "XIVGEyflxjQ",
+            "title": "AURORA (con Armenta)",
+            "artist": "Fuerza Regida, Grupo Frontera, Oscar Maydon",
+            "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "artistIds": [
+              "UC0kxNxFQCK6d2spPz5Sme7Q",
+              "UCJa2FF4TUB13Mm0GurZAqog",
+              "UCxTyOt1nVVexDlQub6kvvNQ"
+            ],
+            "album": "MALA MÍA",
+            "albumId": "MPREb_wj4baccFDOK",
+            "duration": 220,
+            "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 28000000
+          },
+          {
+            "id": "pk7Znv5NBHc",
+            "title": "Mi Corazón",
+            "artist": "Tiago PZK, Grupo Frontera",
+            "artistId": "UCjYEamX786QxvyO527ezaaw",
+            "artistIds": [
+              "UCjYEamX786QxvyO527ezaaw",
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "Mi Corazón",
+            "albumId": "MPREb_4SfI2OF4pQW",
+            "duration": 127,
+            "cover": "https://yt3.googleusercontent.com/TU0gtXDz1AOWOx_UqN5G8xz4B0oVUwmuwFZU6d1YO-v34nuoYr6rAiLd393veFaUfepV3s5x_yFZkKQ=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 8700000
+          },
+          {
+            "id": "1C-ho0tvCgk",
+            "title": "DE LUNES A LUNES",
+            "artist": "Manuel Turizo, Grupo Frontera",
+            "artistId": "UCfh2j2Dq-aSeLhzuPOsnhVg",
+            "artistIds": [
+              "UCfh2j2Dq-aSeLhzuPOsnhVg",
+              "UCJa2FF4TUB13Mm0GurZAqog"
+            ],
+            "album": "201",
+            "albumId": "MPREb_4rrkI3wZQk1",
+            "duration": 189,
+            "cover": "https://yt3.googleusercontent.com/rKf1f9ZaQAEnnaIw1YQt-sCukBWrLyY8Wb-QZ-1c_797Hjgiqt9SW7QHchGZ22Wv9YMCPmMfWukFAME=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 284000000
+          },
+          {
+            "id": "vS-RRtHHT2c",
+            "title": "Lo Mejor de Grupo Frontera (Hits Originales) (En Vivo)",
+            "artist": "DJ Patamix",
+            "artistId": "UClYsAcbyFzOE4Lqii8JAuwg",
+            "artistIds": [
+              "UClYsAcbyFzOE4Lqii8JAuwg"
+            ],
+            "album": "Lo Mejor de Grupo Frontera (Hits Originales) (En Vivo)",
+            "albumId": "MPREb_TLmdZMRpqxd",
+            "duration": 746,
+            "cover": "https://yt3.googleusercontent.com/YRKajfaoLhcW4eCgmndeh3vsvznjstYOjzL066vUqD0R8AzWlMzeFT2BzodOBm-h9QwRTNEpJNIYMQ=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 6600
+          }
+        ],
+        "more": true
+      },
+      {
+        "query": "Grupo Frontera colaboraciones",
+        "songs": [],
+        "more": true
+      },
+      {
+        "query": "La Del Proceso Grupo Frontera",
+        "songs": [
+          {
+            "id": "fWHwVvXImFg",
+            "title": "La Del Proceso",
+            "artist": "Grupo Frontera, Manuel Turizo",
+            "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+            "artistIds": [
+              "UCJa2FF4TUB13Mm0GurZAqog",
+              "UCfh2j2Dq-aSeLhzuPOsnhVg"
+            ],
+            "album": "La Del Proceso",
+            "albumId": "MPREb_RzNV2WPoBaB",
+            "duration": 185,
+            "cover": "https://yt3.googleusercontent.com/U6DkVEvoLomG-kBBh0m68jJiIwtBw7-Ab6e-ydG4vNcadgSOOykqgFTIfzbUQ5gJHubmB68SiVfqvmjV=w600-h600-l90-rj",
+            "provider": "youtube",
+            "playCount": 131000000
+          }
+        ],
+        "more": true
+      }
+    ],
+    "profile": {
+      "songs": [
+        {
+          "id": "Qa4l4eLxb3Q",
+          "title": "EL AMOR DE SU VIDA",
+          "artist": "Grupo Frontera, Grupo Firme",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCJKREB2c3dO8dgdo8FtdO_A"
+          ],
+          "album": "El Comienzo",
+          "albumId": "MPREb_BLUnel72lUI",
+          "duration": 166,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1507000000
+        },
+        {
+          "id": "xoLfYjX5nzs",
+          "title": "un x100to",
+          "artist": "Grupo Frontera, Bad Bunny",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCiY3z8HAGD6BlSNKVn2kSvQ"
+          ],
+          "album": "El Comienzo",
+          "albumId": "MPREb_BLUnel72lUI",
+          "duration": 195,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1357000000
+        },
+        {
+          "id": "-zce1eosofM",
+          "title": "NO SE VA (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 194,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1238000000
+        },
+        {
+          "id": "9hZ_1wKt6MI",
+          "title": "QUE VUELVAS",
+          "artist": "Grupo Frontera, Carín León",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCGr3AcxG5Ubp4kByu7l5SSA"
+          ],
+          "duration": 170,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1082000000
+        },
+        {
+          "id": "GF2fblgRqmY",
+          "title": "Bebe Dame",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 272,
+          "cover": "https://yt3.googleusercontent.com/4v-drx0PUPQOPENoxSl49_ZyqBNm2bJjgtL-N61llR53yULhjE3nHzHvw0banxt1yL3zuqZ0zwgrmKs=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 976000000
+        },
+        {
+          "id": "fPczdTA1xU0",
+          "title": "COQUETA",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "MALA MÍA",
+          "albumId": "MPREb_wj4baccFDOK",
+          "duration": 242,
+          "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 863000000
+        },
+        {
+          "id": "YZDWdfGgPu0",
+          "title": "Frágil",
+          "artist": "Yahritza Y Su Esencia, Grupo Frontera",
+          "artistId": "UC5oOy_NEadrnh0lXtJpzgjA",
+          "artistIds": [
+            "UC5oOy_NEadrnh0lXtJpzgjA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 161,
+          "cover": "https://yt3.googleusercontent.com/eMB8xkhrIHOASoM3dJhnKMPL7KA8q81cryFvFr87tsI5Y_71u82geJBajn2sjYYq67hDdBW-PPd7ET8y=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 841000000
+        },
+        {
+          "id": "LlWHzLk9Kh0",
+          "title": "TULUM",
+          "artist": "Peso Pluma, Grupo Frontera",
+          "artistId": "UCzmabbKsmXlWnI9N2kKQ4lA",
+          "artistIds": [
+            "UCzmabbKsmXlWnI9N2kKQ4lA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 210,
+          "cover": "https://yt3.googleusercontent.com/0EFnQzgDuo1knRgOVTFeajx7nxqF8lZ-MvaDibDv62BO5MzL-hmE1diFYJz9aQIn1GMJJ7jwmKk5WnmG=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 474000000
+        },
+        {
+          "id": "J-LZsS1zxXI",
+          "title": "ME JALO",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 213,
+          "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 470000000
+        },
+        {
+          "id": "EGfBUHMc2P4",
+          "title": "OJITOS ROJOS (con Ke personajes)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 222,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 469000000
+        },
+        {
+          "id": "Va9Vc2Qv394",
+          "title": "Di Que Sí",
+          "artist": "Grupo Marca Registrada, Grupo Frontera",
+          "artistId": "UCJrXHTk9F1cFhjc88PALfgA",
+          "artistIds": [
+            "UCJrXHTk9F1cFhjc88PALfgA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 191,
+          "cover": "https://yt3.googleusercontent.com/Txt1WtygSL3znXAjwFyEALzrttTA4h3LDIbqBhDeEZO01AhZU_PAeOqaFSocp3-nx5QRqFdyDX6t4tlH=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 424000000
+        },
+        {
+          "id": "dXhFB6cMCiA",
+          "title": "AY MAMÁ",
+          "artist": "Tito Double P, Grupo Frontera",
+          "artistId": "UCATfo9SAdXImyc6ygfbzJBg",
+          "artistIds": [
+            "UCATfo9SAdXImyc6ygfbzJBg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 164,
+          "cover": "https://yt3.googleusercontent.com/y2ItXCZ-_1yRVJpwtjYR8Gs_7Scyief_djnU6CjX3X7a47QKA0k9lOQqamOvo9UXDmpAvTyfvoTNXT2mLA=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 392000000
+        },
+        {
+          "id": "8pReObEKzUo",
+          "title": "911 (En Vivo)",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 176,
+          "cover": "https://yt3.googleusercontent.com/-et0w996Nt7WHlBOUFJFHWwelN-xvYq0COZNeBxgagFSv6GRqgaTsT3XoxSnmUSaPcN6nIjbkMNphc_ESQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 286000000
+        },
+        {
+          "id": "1848WGI_-Lk",
+          "title": "POR QUÉ SERÁ",
+          "artist": "Grupo Frontera, Maluma",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCtKIuEMDzPlUmPgdwBhiGcg"
+          ],
+          "duration": 210,
+          "cover": "https://yt3.googleusercontent.com/2yz3vbBBoK3iIywTU258GgXMrmwiWLkxLT9ZYPsWsnqU_Av9O7b-pBLu06Vfx1VGtaFQ3brZL5JI_y4=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 284000000
+        },
+        {
+          "id": "B6S8BoAK52M",
+          "title": "DE LUNES A LUNES",
+          "artist": "Grupo Frontera, Manuel Turizo",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCfh2j2Dq-aSeLhzuPOsnhVg"
+          ],
+          "duration": 189,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 284000000
+        },
+        {
+          "id": "1C-ho0tvCgk",
+          "title": "DE LUNES A LUNES",
+          "artist": "Manuel Turizo, Grupo Frontera",
+          "artistId": "UCfh2j2Dq-aSeLhzuPOsnhVg",
+          "artistIds": [
+            "UCfh2j2Dq-aSeLhzuPOsnhVg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "201",
+          "albumId": "MPREb_4rrkI3wZQk1",
+          "duration": 189,
+          "cover": "https://yt3.googleusercontent.com/rKf1f9ZaQAEnnaIw1YQt-sCukBWrLyY8Wb-QZ-1c_797Hjgiqt9SW7QHchGZ22Wv9YMCPmMfWukFAME=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 284000000
+        },
+        {
+          "id": "3trQOGWUp0w",
+          "title": "LE VA DOLER",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 154,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 230000000
+        },
+        {
+          "id": "qLoWv9iYPmY",
+          "title": "AMOR PROPIO",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 173,
+          "cover": "https://yt3.googleusercontent.com/PliwT2QmOgWzf0oDybVJr4C07t9ND_RNQwdcOeLOAGbzde9Y7DewhVlSRyAUOl7H20TeqpV-vUEe9x19=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 186000000
+        },
+        {
+          "id": "qXBkbnupgMo",
+          "title": "No Capea",
+          "artist": "Xavi, Grupo Frontera",
+          "artistId": "UCfmeXjlCXi37LGF7O2VT2zA",
+          "artistIds": [
+            "UCfmeXjlCXi37LGF7O2VT2zA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 195,
+          "cover": "https://yt3.googleusercontent.com/gMH8tCD-niDzcJCMjEqHfuhiZP8_a-jpQPk0R-KTVty9Ga59cuD-lEzyncL9PrxrYFoGVAZ6gIMsve4R=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 183000000
+        },
+        {
+          "id": "hQ3mHK-nPVU",
+          "title": "Ya Me Entere (En Vivo)",
+          "artist": "De Parranda, Grupo Frontera",
+          "artistId": "UC1UmrJT2wwiElfg5YRARPtg",
+          "artistIds": [
+            "UC1UmrJT2wwiElfg5YRARPtg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 223,
+          "cover": "https://yt3.googleusercontent.com/bqHgWrMaEb1dtu9G_WYgg7OV5mcpKWhxVAPeeZmmLURr40YYIz0Ntd0i44oXTROhDElgAg05SfBX0SDtwA=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 165000000
+        },
+        {
+          "id": "6IO9MiDsV3w",
+          "title": "Hecha Pa' Mí",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 196,
+          "cover": "https://yt3.googleusercontent.com/NlB_rhwf9bvgLFaJIeata6-ypHgNoXZdHXKVqSNGpVHHNEF1lsxnZymYxm4qghQ7EGeA5h-j9KlXc6dwlQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 149000000
+        },
+        {
+          "id": "fWHwVvXImFg",
+          "title": "La Del Proceso",
+          "artist": "Grupo Frontera, Manuel Turizo",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCfh2j2Dq-aSeLhzuPOsnhVg"
+          ],
+          "duration": 185,
+          "cover": "https://yt3.googleusercontent.com/U6DkVEvoLomG-kBBh0m68jJiIwtBw7-Ab6e-ydG4vNcadgSOOykqgFTIfzbUQ5gJHubmB68SiVfqvmjV=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 131000000
+        },
+        {
+          "id": "aEMuMcSz-SI",
+          "title": "(Entre Paréntesis)",
+          "artist": "Shakira, Grupo Frontera",
+          "artistId": "UCo6JijJGA3IvIiPsawDK3Ww",
+          "artistIds": [
+            "UCo6JijJGA3IvIiPsawDK3Ww",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 169,
+          "cover": "https://yt3.googleusercontent.com/UkRThQZAN_SN0xXiq4JfKzpEa4Kp0AmRR1ZWUrtrJJJ04qcpgaPExfG0lWBtiO3V2HrHdR3Zq2dZHnhW=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 129000000
+        },
+        {
+          "id": "ZW927enps64",
+          "title": "EN ALTAVOZ",
+          "artist": "Grupo Frontera, Junior H",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCwA5HHGsAlpU1UlhwWD52uA"
+          ],
+          "duration": 167,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 111000000
+        },
+        {
+          "id": "FJwObUcVcyA",
+          "title": "YA PEDO QUIÉN SABE",
+          "artist": "Grupo Frontera, Christian Nodal",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UC_nxbep6wWeIEVb1UKn4euw"
+          ],
+          "duration": 192,
+          "cover": "https://yt3.googleusercontent.com/CfhiKWapswR0IjKrDNqUf4PdfSHPhEjv_651mNuR_noJdFmQUGGgHO_zbqmpjXULDOjqZBd-Bbx6IzGUCA=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 104000000
+        },
+        {
+          "id": "cGUKYeSG9E0",
+          "title": "ÁNGEL",
+          "artist": "Grupo Frontera, Romeo Santos",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCpB_98tUTs3zSiOxZuGPnOA"
+          ],
+          "duration": 185,
+          "cover": "https://yt3.googleusercontent.com/EXRVISFnhJ3wuRdJAnBprxb_rqwI55hRq3Mcfjkf8gedDLZcA54ZUyzjiXW9fnrUS0rjZsSx2uu9v2k=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 102000000
+        },
+        {
+          "id": "_2vbSffwK2M",
+          "title": "Alch Si",
+          "artist": "Carin Leon, Grupo Frontera",
+          "artistId": "UCGr3AcxG5Ubp4kByu7l5SSA",
+          "artistIds": [
+            "UCGr3AcxG5Ubp4kByu7l5SSA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 154,
+          "cover": "https://yt3.googleusercontent.com/aIF0H1o1RHXlE0B7FEJebeAAeXonXR9izjgP_uJ6TSPnGBeVQV2V9NwIkVFECXDRhzmxThPUbfoGJ88u=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 90000000
+        },
+        {
+          "id": "aFLyZUmMU4A",
+          "title": "Dame Un Chance (La Cumbia Bélica)",
+          "artist": "Luis R Conriquez, Grupo Frontera",
+          "artistId": "UCm7mbvc5QOn5JzkeCrk-wdw",
+          "artistIds": [
+            "UCm7mbvc5QOn5JzkeCrk-wdw",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "Dame Un Chance (La Cumbia Bélica)",
+          "albumId": "MPREb_EHUliqQpPQF",
+          "duration": 181,
+          "cover": "https://yt3.googleusercontent.com/E2yeUPPBfdXkwR3Ds2UjeuwSxRKfIMotT4jZKS8z0jK_A1dxmqZ6qyH3jdRDZ0_1hepOdoaNfUJJW10T=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 59000000
+        },
+        {
+          "id": "kGuFoTu0tF0",
+          "title": "La Ladrona (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 187,
+          "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 58000000
+        },
+        {
+          "id": "VSihshwXwy8",
+          "title": "Mutuo",
+          "artist": "Grupo Frontera, Carín León",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCGr3AcxG5Ubp4kByu7l5SSA"
+          ],
+          "duration": 178,
+          "cover": "https://yt3.googleusercontent.com/FOJ4_570Hg4eUNY3d6Ig3Ztzax5REM053KPyAFilW92s2ue--x7Wz6BbHXmJnxMz9ePq32Ih9LlA71Mz=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 50000000
+        },
+        {
+          "id": "2uXyXwLKYKs",
+          "title": "Modo Difícil",
+          "artist": "Grupo Firme, Grupo Frontera",
+          "artistId": "UCJKREB2c3dO8dgdo8FtdO_A",
+          "artistIds": [
+            "UCJKREB2c3dO8dgdo8FtdO_A",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 202,
+          "cover": "https://yt3.googleusercontent.com/GbANmD45OLoNrT_8rnz3U2G1gTetd4zKTuu7KLkNWuXj8IXZ1jIueAKO4ehWBxcfhkxW6P-z_U_UyczX=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 49000000
+        },
+        {
+          "id": "xq9P1HZdLfo",
+          "title": "QUÉDATE BEBÉ",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 194,
+          "cover": "https://yt3.googleusercontent.com/9dPrQaV0210X40Dq9ZhvQ_Huzg3Pvp1zjyy55fvLdpxAEdOXebEprYO5C8AhVx5eFnZiRbb5Nnt7Qtxc-w=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 43000000
+        },
+        {
+          "id": "-GxcDdnyFWQ",
+          "title": "Vete (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 176,
+          "cover": "https://yt3.googleusercontent.com/_OVYcLhmOsMYXKIlZ_NSK1i5TBRorNpyhAvJeT6wRtJDHm3X8oUz8ZtjkKWWQanHuCLmrJuXt8u6KvUw=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 41000000
+        },
+        {
+          "id": "nwE2lzKWBiY",
+          "title": "Agachadita",
+          "artist": "Grupo Frontera, De Parranda",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UC1UmrJT2wwiElfg5YRARPtg"
+          ],
+          "duration": 196,
+          "cover": "https://yt3.googleusercontent.com/Y5PwecrjIp5cMDj6m6QVhhMevuE2K0iq2AdZ2u7RjIqZZB3dhmDOFT3SkvDBJV6Qhy1F8vGG32FKcKqT=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 41000000
+        },
+        {
+          "id": "CjhSaw9tUEs",
+          "title": "Quedate Conmigo (Grupo Frontera)",
+          "artist": "Eslabon Armado, Grupo Frontera",
+          "artistId": "UCmqrOR5GZcSNS5BLAAt6hPg",
+          "artistIds": [
+            "UCmqrOR5GZcSNS5BLAAt6hPg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 161,
+          "cover": "https://yt3.googleusercontent.com/GbxpjzUoJrn7r1d-PSH7OXTPfq40ovx4iL4m8WSmQuN4G_5jwx4Ebam23R8c8hDDLXwot8SDog7WfI3arw=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 39000000
+        },
+        {
+          "id": "maPZcqk9NUc",
+          "title": "Mas Que Amigos (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 188,
+          "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 37000000
+        },
+        {
+          "id": "vg2jpf0Y-HY",
+          "title": "¿Qué Te Parece?",
+          "artist": "Grupo Frontera, Óscar Maydon",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCxTyOt1nVVexDlQub6kvvNQ"
+          ],
+          "duration": 183,
+          "cover": "https://yt3.googleusercontent.com/zm5cnY_NgH93owQGyxqXRsB3AnOshYXCuXiLqXpmUUZFoEIXpBgLnCe_Nwsz-x-2Fh6xp7KtFf9-77zh=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 33000000
+        },
+        {
+          "id": "KX0rlNqAlTA",
+          "title": "Pienso En Ella",
+          "artist": "Grupo Frontera, Gabito Ballesteros",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCYMm2JZ_mvXYr7vT9-8_thw"
+          ],
+          "duration": 160,
+          "cover": "https://yt3.googleusercontent.com/RCOB5OjSzY6X1daDKlWn5nlbUSqz7PHjRsQqG0mUQ40Rw3Hej-erw9m94JQcmkYdx3Z3Sbwn5Ze5FLA=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 32000000
+        },
+        {
+          "id": "cOasEB4EdlQ",
+          "title": "DESQUITE",
+          "artist": "Grupo Frontera, NICKI NICOLE",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCei_d3N_YJKny96V_5-dO9w"
+          ],
+          "duration": 203,
+          "cover": "https://yt3.googleusercontent.com/YOCGrohvPUUtnZ0CQ-RJ8933SWHoSEAC3nhIQd2fMUYDjx1LjfqRZEOJFsT-xI3bKDCCYw1ZMFG8zt4=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 31000000
+        },
+        {
+          "id": "54QuijLJ2jk",
+          "title": "La Pareja Ideal (En Vivo)",
+          "artist": "Grupo Frontera, Los Dorados",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCb35mQ8r5i60gsoGQ7DLc8Q"
+          ],
+          "album": "En Vivo, Vol.1",
+          "albumId": "MPREb_Kfx1dL2e06X",
+          "duration": 255,
+          "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 29000000
+        },
+        {
+          "id": "XIVGEyflxjQ",
+          "title": "AURORA (con Armenta)",
+          "artist": "Fuerza Regida, Grupo Frontera, Oscar Maydon",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCxTyOt1nVVexDlQub6kvvNQ"
+          ],
+          "album": "MALA MÍA",
+          "albumId": "MPREb_wj4baccFDOK",
+          "duration": 220,
+          "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 28000000
+        },
+        {
+          "id": "HkjnECM6Crw",
+          "title": "Si Yo Fuera Ladrón (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 180,
+          "cover": "https://yt3.googleusercontent.com/_OVYcLhmOsMYXKIlZ_NSK1i5TBRorNpyhAvJeT6wRtJDHm3X8oUz8ZtjkKWWQanHuCLmrJuXt8u6KvUw=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 25000000
+        },
+        {
+          "id": "z0wdoIuNmsg",
+          "title": "NUNCA LA OLVIDÉ",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 164,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 23000000
+        },
+        {
+          "id": "DD-BMHWfJdw",
+          "title": "LOS DOS",
+          "artist": "Grupo Frontera, Morat",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCyZgGJiy9vum1xD7hXWG_rA"
+          ],
+          "duration": 215,
+          "cover": "https://yt3.googleusercontent.com/Ya3eT9HXXvcnDwZQ2SZjUrVk2Q_PmMIwd1g8s1FJZhPPlgbUrtPL7F6t2g3-ZI_Ms_x5tZeZyERmu13H=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 23000000
+        },
+        {
+          "id": "W0O32qvvzcg",
+          "title": "El Ultimo Beso (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 217,
+          "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 18000000
+        },
+        {
+          "id": "Tl0smVIFQpM",
+          "title": "Lalala",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 191,
+          "cover": "https://yt3.googleusercontent.com/D8Jf5MpWywUG5SGmaF7-AuVPbd_DB20ZAdjnmqGWfSR1i1Ar3STIqffuut3QRFDlRwpZq33wwaODd5s=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 17000000
+        },
+        {
+          "id": "BQiB104Cy9M",
+          "title": "SOS",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 170,
+          "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 17000000
+        },
+        {
+          "id": "4sYmf3lL8RY",
+          "title": "Un Solo Corazón",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 189,
+          "cover": "https://yt3.googleusercontent.com/drEz5KJ08L7xnE7dDxa42DJ5d_1pWajvfMcu7f3kEAO2BS9ozvOdljSB28Pbq-hg7xTBImUp8PEPu68njA=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 17000000
+        },
+        {
+          "id": "UyxRuNutPqw",
+          "title": "Hoy no me siento bien",
+          "artist": "Alejandro Sanz, Grupo Frontera",
+          "artistId": "UCGe3279ZI3YLoCWCd7wB0pg",
+          "artistIds": [
+            "UCGe3279ZI3YLoCWCd7wB0pg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 154,
+          "cover": "https://yt3.googleusercontent.com/Rzdu6ZS09WMCckS_SaCChvtPatgFTDOKN_zataF6iyJ-TTj3FvBaMUtaRIzEFzlb93FutaumO2fYC48=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 15000000
+        },
+        {
+          "id": "bRknqk5ZqsA",
+          "title": "tu favorito",
+          "artist": "Grupo Frontera, Fuerza Regida, Cris MJ",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCOykHV9q0qb0vrBsxO_5fkQ"
+          ],
+          "duration": 206,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 14000000
+        },
+        {
+          "id": "FnAyBvtB_OE",
+          "title": "0 SENTIMIENTOS",
+          "artist": "Fuerza Regida, Grupo Frontera",
+          "artistId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "artistIds": [
+            "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 158,
+          "cover": "https://yt3.googleusercontent.com/llYLq4jy6rSfhDDnEwL5rsxS80eBMvPzcZoryVzEQhbZCCOJMgcrkhtWiXTMLnASubnA0Ga99l6lVdUg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 14000000
+        },
+        {
+          "id": "USeCLQiW_uM",
+          "title": "Ojitos Bellos",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 180,
+          "cover": "https://yt3.googleusercontent.com/M6vEncYS-XoI1mpBLzL4vcOiUv9V8RG243g7o51R98svvBqo-wBNspckFx3D6Ibt4dZlupw9ylPGd6BLhw=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 13000000
+        },
+        {
+          "id": "j9PRDVMBFYA",
+          "title": "IMPOSIBLE",
+          "artist": "Grupo Frontera, Silvestre Dangond",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCHgCGCFOoCaY6IB3nJC17Yg"
+          ],
+          "duration": 194,
+          "cover": "https://yt3.googleusercontent.com/rLCSnV1Vn5Or8jWzNMOjKzQ8nPRJnfS7p_NfwrgsmtiooSpkLx68Vw14V-GzQuQEd_Q_RVCJrcHNjArNQw=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 13000000
+        },
+        {
+          "id": "6wa7BtovOEc",
+          "title": "no lo ves",
+          "artist": "Grupo Frontera, Ozuna",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCKEFjh4JL-OyMI8z3h5Coaw"
+          ],
+          "duration": 150,
+          "cover": "https://yt3.googleusercontent.com/7giGNklLJLV80bp4YkFMARS0nqN5_JwoXNqpPUCzIfa3flIMABQjAxyAG7uuuAxOiC-HE22ZYSRrnpw-=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 12000000
+        },
+        {
+          "id": "LgH2q6m_xdc",
+          "title": "Apodo",
+          "artist": "Ryan Castro, Grupo Frontera",
+          "artistId": "UCDxiGGtBV3CQiE-NKLEFgUg",
+          "artistIds": [
+            "UCDxiGGtBV3CQiE-NKLEFgUg",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 174,
+          "cover": "https://yt3.googleusercontent.com/1h_6fcsq8BKpLPZwUY0DOWYlkbJmcEsRyg2WKcF802jUA_QHUS17EdQY6aCywj6WB9kLgI9XMmZ_M3BH=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 12000000
+        },
+        {
+          "id": "Hg0TqZoQDIo",
+          "title": "monterrey",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 219,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 11000000
+        },
+        {
+          "id": "9czJKf5UXrM",
+          "title": "¿Qué Haces Por Acá?",
+          "artist": "Grupo Frontera, Mister Chivo",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCnc7t2T3yvxMPgm03_K82Eg"
+          ],
+          "duration": 189,
+          "cover": "https://yt3.googleusercontent.com/EokzcXd1k2hw7xvX2LVPI4rBFxw8r_e643YPZXMK3T-HR1Dn9PanvOi-rlBuai9eEHt6rsaGAOBcvxHk=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 11000000
+        },
+        {
+          "id": "wE1WeIAT35k",
+          "title": "ay bebé",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 171,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 10000000
+        },
+        {
+          "id": "kGEQV50UypE",
+          "title": "No Se Parece A Ti",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 201,
+          "cover": "https://yt3.googleusercontent.com/kbqBgMRIThNQpUMjGnKYLYGNj8GKZgPlpJ5FrpYCqg0uhQWSgVrzedNYtHM3Js7t_JU-tPTQpHNCuks=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 10000000
+        },
+        {
+          "id": "MCR8yKH3ux4",
+          "title": "se me sale",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 147,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 9800000
+        },
+        {
+          "id": "ar5PzBJH8lg",
+          "title": "mi droga",
+          "artist": "Grupo Frontera, Los Dareyes De La Sierra",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCDB1S6gqvv0wfPoqlX8ubGA"
+          ],
+          "duration": 168,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 9600000
+        },
+        {
+          "id": "RLPsBDj7lwI",
+          "title": "Ya No",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 169,
+          "cover": "https://yt3.googleusercontent.com/LDbyN4E145ynDJ1QjhA-98NB7UafJfWS5N-ny45mkqGVZEXxq7TDKf-UdBjsZDNp1R0FYgNztfOBlw0=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 9200000
+        },
+        {
+          "id": "Z7HEr6opkms",
+          "title": "Estos Celos (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "En Vivo, Vol.1",
+          "albumId": "MPREb_Kfx1dL2e06X",
+          "duration": 222,
+          "cover": "https://yt3.googleusercontent.com/-uXgnDMZ_3O0jZEcM3edTvajwmMUmjuNlx4r169gm-aWi_Etl97dZfp5bZCceOu9qtPJkGl9ofeYUKgF=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 8900000
+        },
+        {
+          "id": "ZZAkziz4wO4",
+          "title": "Me Retiro",
+          "artist": "Santana, Grupo Frontera",
+          "artistId": "UCX0rR7x8-nLew2t8UH-n2aw",
+          "artistIds": [
+            "UCX0rR7x8-nLew2t8UH-n2aw",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 249,
+          "cover": "https://yt3.googleusercontent.com/Livu1-dIcqApqfmI6YwpWsWkEIgtCrqlnE_LuP-R-HdkT01q8rPFW7qna3uhkMwVNWoWI29Z9qvD-W8ufg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 8800000
+        },
+        {
+          "id": "pk7Znv5NBHc",
+          "title": "Mi Corazón",
+          "artist": "Tiago PZK, Grupo Frontera",
+          "artistId": "UCjYEamX786QxvyO527ezaaw",
+          "artistIds": [
+            "UCjYEamX786QxvyO527ezaaw",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "Mi Corazón",
+          "albumId": "MPREb_4SfI2OF4pQW",
+          "duration": 127,
+          "cover": "https://yt3.googleusercontent.com/TU0gtXDz1AOWOx_UqN5G8xz4B0oVUwmuwFZU6d1YO-v34nuoYr6rAiLd393veFaUfepV3s5x_yFZkKQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 8700000
+        },
+        {
+          "id": "h67RBsoqN5U",
+          "title": "Beses Asi",
+          "artist": "Grupo Frontera, Calle 24",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCmE9gW01iLXR-ex8eNqvq3A"
+          ],
+          "duration": 184,
+          "cover": "https://yt3.googleusercontent.com/imGxF8oAk-FdWsVdXUokX28wUumxsI63ys8u1Awg9HB7GxpnS980YTA7JK8VfR4U4JRUc2fmxRFxJaQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 8400000
+        },
+        {
+          "id": "J4eobRzM3vw",
+          "title": "Cada Vez Me Gusta Más",
+          "artist": "Grupo Frontera, Alejandro Fernández",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCc73qvqMLRRggHBbdFWT-Jw"
+          ],
+          "duration": 205,
+          "cover": "https://yt3.googleusercontent.com/PpIYF97LS85pqFC6-zBXLsp_N1y7DlM7-zdSHMIwesf65aa9RijSpb02bwvwDdy8EvnoE3HFFeJSl2Vj=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 8000000
+        },
+        {
+          "id": "1z7FKB4VfwA",
+          "title": "Ex de Verdad",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "album": "Ex de Verdad",
+          "albumId": "MPREb_wXi1CKsle9h",
+          "duration": 187,
+          "cover": "https://yt3.googleusercontent.com/LEsw5OcIqsu_ZmUFvW0DEKyZZz-dH-pDHlYCsejVf6zXKJ7VnYmUkEUZKPhv9JgH-o_T37AQ2NyqcQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 7700000
+        },
+        {
+          "id": "PnNAgU6-Lk4",
+          "title": "NO SÉ QUÉ PASÓ",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 150,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 7100000
+        },
+        {
+          "id": "PO4r8bMy9gw",
+          "title": "échame la mano",
+          "artist": "Grupo Frontera, Tito Double P",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCATfo9SAdXImyc6ygfbzJBg"
+          ],
+          "duration": 146,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 7000000
+        },
+        {
+          "id": "CTE27xBUoOU",
+          "title": "La Buena Eras Tú",
+          "artist": "Grupo Frontera, Neton Vega",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCHqMn3yv_kft6-kpbiMgDoA"
+          ],
+          "duration": 203,
+          "cover": "https://yt3.googleusercontent.com/UWl1EzT0IM1xn501WxA3z6hJN-ocF1BZazMNFLFTd2vFbOzDTFVlOI7llHNQBttANx1lxSw6RfIT8Avp=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 6600000
+        },
+        {
+          "id": "O-z_ZrlNMtg",
+          "title": "ECHÁNDOTE DE MENOS",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 187,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 6100000
+        },
+        {
+          "id": "vgFv8WunYlg",
+          "title": "triste pero bien c*brón",
+          "artist": "Grupo Frontera, Myke Towers",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UCYPsIfSIEwWcoynHBP5k1dg"
+          ],
+          "duration": 171,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 5800000
+        },
+        {
+          "id": "raR0hJsqxlQ",
+          "title": "No Te Arrepentiras",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 168,
+          "cover": "https://yt3.googleusercontent.com/YgDB0oGL5Nk0qkQQU1Sj-vGT2ZJpkOaqToPbok-wokODNjrgfnkIlZEqN_goRJHam6gCQyCe8O2h465v=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 5500000
+        },
+        {
+          "id": "SRWWiDQHUo8",
+          "title": "Salma Hayek",
+          "artist": "Luis R Conriquez, Grupo Frontera",
+          "artistId": "UCm7mbvc5QOn5JzkeCrk-wdw",
+          "artistIds": [
+            "UCm7mbvc5QOn5JzkeCrk-wdw",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 224,
+          "cover": "https://yt3.googleusercontent.com/69gnyEKyl57SGuQCXKpKfaRzi69vyiDqBiSHvoaMZ0uVh1oXlTG6_wEVYidayOdK7NlxYNPPUB3irAIP=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 5400000
+        },
+        {
+          "id": "Qv2K0o44hD8",
+          "title": "Pary",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 173,
+          "cover": "https://yt3.googleusercontent.com/iQmOK2CFf3n32QQ4uP6M_hOKWwwhry1o5Q1_Md_0_r39UNZfULfOcNj7FznXjkyxL2sEsjg-He75M-sD=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 5000000
+        },
+        {
+          "id": "EqPdodcLg0g",
+          "title": "Como De Sol A Sol",
+          "artist": "Rawayana, Carín León, Grupo Frontera",
+          "artistId": "UC64-XydIPxvuapibvrXpH3Q",
+          "artistIds": [
+            "UC64-XydIPxvuapibvrXpH3Q",
+            "UCGr3AcxG5Ubp4kByu7l5SSA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 123,
+          "cover": "https://yt3.googleusercontent.com/zPDzKeVjuw8viqW0FxHjGlOCIa_ixJJRT15kzbf9ZlYzCuyoL8mT5G1PPO8URIsqa9hZQKxYKwUDqgYhbg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 4300000
+        },
+        {
+          "id": "dBO3YpK4mrQ",
+          "title": "quien la manda",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 174,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 3800000
+        },
+        {
+          "id": "zQfuw9nRLfs",
+          "title": "La Plata (En Vivo)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 140,
+          "cover": "https://yt3.googleusercontent.com/ZVREIGBrOKehP3EKYnzt8uuFy_TG7ajtDalK2PwbVFqBVAKc5offPSpIV6NX09Pt_03_qCV9cPQdUis=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 3300000
+        },
+        {
+          "id": "Q67e1HqVSs4",
+          "title": "Super Poderes (con Secretto)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 174,
+          "cover": "https://yt3.googleusercontent.com/TW9JlHY9rDd1YG736fpGATth5LSnUpCNoHcnYapFuEfZKE-cEICB--14Juzta-xLSW1wGM9GJ1k2XvG9Ag=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 3200000
+        },
+        {
+          "id": "3UKpxuPQnxM",
+          "title": "Una vida juntos",
+          "artist": "Maluma, Grupo Frontera, El Bogueto",
+          "artistId": "UCtKIuEMDzPlUmPgdwBhiGcg",
+          "artistIds": [
+            "UCtKIuEMDzPlUmPgdwBhiGcg",
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UC8r_j-qnSCj1t4h6EVN5TrQ"
+          ],
+          "duration": 195,
+          "cover": "https://yt3.googleusercontent.com/tj4m7q0L05Ri_eortn0P69P2QYkmqDPNI6VBhdoj9LI8wsXVhyDlj8NxQ_7ufkrQ20FJek2FMzdVaWQl=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 3000000
+        },
+        {
+          "id": "udAdnzjiCsc",
+          "title": "tranqui",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 166,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2900000
+        },
+        {
+          "id": "P_nocT8nntc",
+          "title": "ME GUSTAS",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 154,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2800000
+        },
+        {
+          "id": "3noBc035DXk",
+          "title": "F*CKIN AMOR",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 193,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2800000
+        },
+        {
+          "id": "BkkIYz_JltE",
+          "title": "Bye",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 204,
+          "cover": "https://yt3.googleusercontent.com/iQmOK2CFf3n32QQ4uP6M_hOKWwwhry1o5Q1_Md_0_r39UNZfULfOcNj7FznXjkyxL2sEsjg-He75M-sD=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2700000
+        },
+        {
+          "id": "yNSa_Si-CD4",
+          "title": "si me quiere",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 189,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2700000
+        },
+        {
+          "id": "lEH_iSdkKPY",
+          "title": "que bueno que te fuiste",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 203,
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2700000
+        },
+        {
+          "id": "Mqrs-i35Nik",
+          "title": "NO HAY VATO PERFECTO",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 201,
+          "cover": "https://yt3.googleusercontent.com/nHOKT7JhitMPHjh0AYqHzL6-lW6Ad-vO8IZZZp6gOL4LRyyW5vpRKbLDULCowPAmWOyfBYKtsIXf_m69=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 2400000
+        },
+        {
+          "id": "CFfXu8izecI",
+          "title": "ME HIZO UN FAVOR",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 157,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1800000
+        },
+        {
+          "id": "oTY2vZmsucM",
+          "title": "IBIZA",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 173,
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1500000
+        },
+        {
+          "id": "-v8EdzzcLPM",
+          "title": "Cuéntame",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 192,
+          "cover": "https://yt3.googleusercontent.com/iQmOK2CFf3n32QQ4uP6M_hOKWwwhry1o5Q1_Md_0_r39UNZfULfOcNj7FznXjkyxL2sEsjg-He75M-sD=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1400000
+        },
+        {
+          "id": "8OLqKMGykAY",
+          "title": "LAS FLORES",
+          "artist": "Grupo Frontera, Yahritza Y Su Esencia",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog",
+            "UC5oOy_NEadrnh0lXtJpzgjA"
+          ],
+          "duration": 167,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1300000
+        },
+        {
+          "id": "hun3txWYvOM",
+          "title": "Te Voy A Conquistar",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 192,
+          "cover": "https://yt3.googleusercontent.com/iQmOK2CFf3n32QQ4uP6M_hOKWwwhry1o5Q1_Md_0_r39UNZfULfOcNj7FznXjkyxL2sEsjg-He75M-sD=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1200000
+        },
+        {
+          "id": "2W3JJS4W6o0",
+          "title": "CUÍDALA",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 164,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1100000
+        },
+        {
+          "id": "bx2uZ2W9SHM",
+          "title": "CANSADO DE SUFRIR",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 150,
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1000000
+        },
+        {
+          "id": "77DRYPD4iVU",
+          "title": "No Te Detengas (Remasterizado)",
+          "artist": "Grupo Frontera",
+          "artistId": "UCJa2FF4TUB13Mm0GurZAqog",
+          "artistIds": [
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 371,
+          "cover": "https://yt3.googleusercontent.com/anrvBqebYFWTiuUbCF_VkF-aT9EhjQljk1ZCLTIHwLYgCmhTrHFeW4R-oB0peqOTI2cgw7DAee9dFciC=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 1000000
+        },
+        {
+          "id": "VlogDwpsBtk",
+          "title": "Tu Recuerdo",
+          "artist": "Ricky Martin, Grupo Frontera",
+          "artistId": "UC2rtpKv9X9pfwCuaEt9wsrQ",
+          "artistIds": [
+            "UC2rtpKv9X9pfwCuaEt9wsrQ",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 224,
+          "cover": "https://yt3.googleusercontent.com/3q9L4c3hBYVu0EArqe0DshfFNQu_Iy56F1bfMpeMomGFN8276Ou9KRNh_mRBXNeBUgJeX44NYoyII1w=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 369000
+        },
+        {
+          "id": "dBdsN7pFaPU",
+          "title": "Alch Si (Live from Las Vegas)",
+          "artist": "Carin Leon, Grupo Frontera",
+          "artistId": "UCGr3AcxG5Ubp4kByu7l5SSA",
+          "artistIds": [
+            "UCGr3AcxG5Ubp4kByu7l5SSA",
+            "UCJa2FF4TUB13Mm0GurZAqog"
+          ],
+          "duration": 156,
+          "cover": "https://yt3.googleusercontent.com/3Blf0zeGmYagHKrgfFQBDtnpYY98opMtVjqNIF73Vp7ngxgVIWafInvpeKyf6s5H8Ohs-9O1cSQD-I2Akg=w600-h600-l90-rj",
+          "provider": "youtube",
+          "playCount": 356000
+        }
+      ],
+      "artists": [
+        {
+          "id": "UC_nxbep6wWeIEVb1UKn4euw",
+          "name": "Christian Nodal",
+          "artist": "",
+          "cover": "https://lh3.googleusercontent.com/muLez3PAAcBZ6mF7D1viJ0ft5i5y1vedDHyv3yi_kh23nJuNR_W-10RwyE0yHn61sp9wA98cctf_d-F7=w600-h600-l90-rj",
+          "listeners": 29200000,
+          "kind": "artist"
+        },
+        {
+          "id": "UC0kxNxFQCK6d2spPz5Sme7Q",
+          "name": "Fuerza Regida",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/dkYRAOQcSpLuL43zdgMfsHuegzZEUogHxxx4Pm3Pf_L6QuEMS9oIZIbWzB0z9gQEcSjD2qI69sgeEBhG=w600-h600-l90-rj",
+          "listeners": 112000000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCYB_QAq6Td2oAvgx18tHDCQ",
+          "name": "Julión Álvarez y su Norteño Banda",
+          "artist": "",
+          "cover": "https://lh3.googleusercontent.com/6qw2uQWJZmyvLklv2m8bo4BqIhCaNwehraX910oS82R9hiyNXA6zOsP9fgtYzLM_ztoRyCzJCa5ARdI=w600-h600-l90-rj",
+          "listeners": 31100000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCzmabbKsmXlWnI9N2kKQ4lA",
+          "name": "Peso Pluma",
+          "artist": "",
+          "cover": "https://lh3.googleusercontent.com/d-rWQKHFbROoZbnokNjzMzQieVXaJQuqt00AADzJeMQvBnGIs88UpzcQ3nXR1__AsFwsQLciMNjWHIg=w600-h600-l90-rj",
+          "listeners": 83100000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCJKREB2c3dO8dgdo8FtdO_A",
+          "name": "Grupo Firme",
+          "artist": "",
+          "cover": "https://lh3.googleusercontent.com/2hOGwShy-G5ZEEtlqa6Epokv2DZL9PSypM92pc3j-V8E1IzK4nFaFKuSdIq62tFVD3uEzr81Jk6y6d0=w600-h600-l90-rj",
+          "listeners": 47700000,
+          "kind": "artist"
+        },
+        {
+          "id": "UC5oOy_NEadrnh0lXtJpzgjA",
+          "name": "Yahritza Y Su Esencia",
+          "artist": "",
+          "cover": "https://lh3.googleusercontent.com/JjdmhJ2gYku8DSgLZ6tauHgbDEEBGhJ17TqpryZBxkzhTUawXJTviW9pEaLQ3Z8rDD22zPdv2gCj6uY=w600-h600-l90-rj",
+          "listeners": 9870000,
+          "kind": "artist"
+        },
+        {
+          "id": "UC3tK3IbMItYf7CmQ-LFXROQ",
+          "name": "Los Parras",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/_Zf6FyeOVipnFBGtstnQTHd2D10vaMufm02nxUN_48pltNQYGro3UoT8p9hOMXSOuC9rpCxdsyZ2A-Y=w600-h600-l90-rj",
+          "listeners": 3390000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCHqMn3yv_kft6-kpbiMgDoA",
+          "name": "Neton Vega",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/MqtOKVoQ5t31Qa6FFx72jWWh76i3s2An_TDTn_jLSmwWRuZsg_hnukAB9yADjna-IjVn5l0UkJPiXaDB=w600-h600-l90-rj",
+          "listeners": 37100000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCGr3AcxG5Ubp4kByu7l5SSA",
+          "name": "Carín León",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/6CTtKwFfcxoKN_eqHeXwnPGx8_ajZH7bEGI6Q5LloEx-dGnHPLo8vdH0tl1tiAelzFo9BBeW8o3TJpY=w600-h600-l90-rj",
+          "listeners": 43200000,
+          "kind": "artist"
+        },
+        {
+          "id": "UCfmeXjlCXi37LGF7O2VT2zA",
+          "name": "Xavi",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/1gMAiasXBYufoeYVfzwdzv4O3TUMr8FvuLhDpFbyhoVF0h28RW3ATyMS4eyASamQd9c_TIc2ZohAeQ8=w600-h600-l90-rj",
+          "listeners": 28200000,
+          "kind": "artist"
+        }
+      ],
+      "albums": [
+        {
+          "id": "MPREb_OrKVIE9GCve",
+          "name": "LO QUE ME FALTA POR LLORAR",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/UYkO5HIJcymRntzGZVUNJWOO3hb4UNfqkMiliSbPb05AVpBak-UnoUmmz2cylKJQ6usYzeR-cgJCFua_=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_SECjZhE3NIl",
+          "name": "JUGANDO A QUE NO PASA NADA",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/wdVgDm-v4NtRHpMTZVMSwD0fJwUaG4o7CEZRu-XfGQOzxRmIEdfD_mACi_UbczNxN-Sy1Yvvm1FxB3MQ=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_BLUnel72lUI",
+          "name": "El Comienzo",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/1k28gA8w7mhVYVIkFJ6lvlEm4LsZ8tflXjqe8TxLGx-rQNeC9G159ER_Nt6SWBYV3SYEDEcFc6tOJ2Q3=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_4tXxEXESmGt",
+          "name": "Con dolor",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/iQmOK2CFf3n32QQ4uP6M_hOKWwwhry1o5Q1_Md_0_r39UNZfULfOcNj7FznXjkyxL2sEsjg-He75M-sD=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_pzRGaSvkiNl",
+          "name": "Cada Vez Me Gusta Más",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/PpIYF97LS85pqFC6-zBXLsp_N1y7DlM7-zdSHMIwesf65aa9RijSpb02bwvwDdy8EvnoE3HFFeJSl2Vj=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_qxSkurcVUPq",
+          "name": "Salma Hayek",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/69gnyEKyl57SGuQCXKpKfaRzi69vyiDqBiSHvoaMZ0uVh1oXlTG6_wEVYidayOdK7NlxYNPPUB3irAIP=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_3jlZrXukJTI",
+          "name": "Ojitos Bellos",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/M6vEncYS-XoI1mpBLzL4vcOiUv9V8RG243g7o51R98svvBqo-wBNspckFx3D6Ibt4dZlupw9ylPGd6BLhw=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_N9MU2e3vXKS",
+          "name": "Un Solo Corazón",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/drEz5KJ08L7xnE7dDxa42DJ5d_1pWajvfMcu7f3kEAO2BS9ozvOdljSB28Pbq-hg7xTBImUp8PEPu68njA=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_fb1vPYprvns",
+          "name": "IMPOSIBLE",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/rLCSnV1Vn5Or8jWzNMOjKzQ8nPRJnfS7p_NfwrgsmtiooSpkLx68Vw14V-GzQuQEd_Q_RVCJrcHNjArNQw=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_vcctcGVkvc0",
+          "name": "Beses Asi",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/imGxF8oAk-FdWsVdXUokX28wUumxsI63ys8u1Awg9HB7GxpnS980YTA7JK8VfR4U4JRUc2fmxRFxJaQ=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_yjbxP5nUrlZ",
+          "name": "no lo ves",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/7giGNklLJLV80bp4YkFMARS0nqN5_JwoXNqpPUCzIfa3flIMABQjAxyAG7uuuAxOiC-HE22ZYSRrnpw-=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_BDfXiEJpcCa",
+          "name": "Modo Difícil",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/GbANmD45OLoNrT_8rnz3U2G1gTetd4zKTuu7KLkNWuXj8IXZ1jIueAKO4ehWBxcfhkxW6P-z_U_UyczX=w600-h600-l90-rj",
+          "kind": "album"
+        },
+        {
+          "id": "MPREb_K1RtjxYZEOT",
+          "name": "No Capea",
+          "artist": "",
+          "cover": "https://yt3.googleusercontent.com/gMH8tCD-niDzcJCMjEqHfuhiZP8_a-jpQPk0R-KTVty9Ga59cuD-lEzyncL9PrxrYFoGVAZ6gIMsve4R=w600-h600-l90-rj",
+          "kind": "album"
+        }
+      ],
+      "continuation": "58da7e39-b97d-4df5-a263-c79bfdf14d9f"
+    }
+  }
+}

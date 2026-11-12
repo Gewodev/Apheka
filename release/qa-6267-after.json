@@ -1,0 +1,24 @@
+{
+  "frame": {
+    "range": 350,
+    "p95": 7.5,
+    "max": 12.199999988079071
+  },
+  "metrics": {
+    "TaskDuration": 0.162001,
+    "ScriptDuration": 0.01289,
+    "LayoutDuration": 0.000403,
+    "RecalcStyleDuration": 0.004813,
+    "LayoutCount": 1,
+    "RecalcStyleCount": 1
+  },
+  "visibleBackdropLayers": 0,
+  "openEventMs": [
+    187,
+    162,
+    104,
+    115,
+    101
+  ],
+  "errors": []
+}

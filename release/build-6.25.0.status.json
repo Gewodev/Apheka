@@ -1,0 +1,10 @@
+{
+  "exitCode": 0,
+  "startedAtUtc": "2026-11-05T00:12:31.5262526Z",
+  "processId": 27668,
+  "finishedAtUtc": "2026-11-05T00:50:19.2637295Z",
+  "state": "complete",
+  "mode": "build",
+  "bundleRecoveredUsingVerifiedLocalTools": true,
+  "finalManifest": "release/apheka_FINAL.json"
+}

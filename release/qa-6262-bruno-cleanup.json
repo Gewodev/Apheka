@@ -1,0 +1,14 @@
+{
+  "removed": 4,
+  "preserved": [
+    "favorites",
+    "local files",
+    "downloads",
+    "other artists"
+  ],
+  "metadataCount": 8,
+  "wrongAssociationsCleared": true,
+  "libraryQueueCleaned": true,
+  "oneTimeAfterExplicitResave": true,
+  "errors": []
+}

@@ -461,7 +461,7 @@ export default function Ajustes() {
   // Cargar información real de la app (no del equipo)
   useEffect(() => {
     if (!isTauri()) {
-      setAppInfo({ name: 'APHEKA', version: '1.0.0', tauriVersion: '—' });
+      setAppInfo({ name: 'POUH', version: '1.0.0', tauriVersion: '—' });
       return;
     }
     (async () => {
@@ -701,7 +701,7 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Perfil de Usuario</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Tu identidad y conexiones en APHEKA</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Tu identidad y conexiones en POUH</p>
                 </div>
 
                 {/* Avatar + Nombre + Foto */}
@@ -787,7 +787,7 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
                       <div>
                         <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 4 }}>Servicios de Google</h3>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de APHEKA</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de POUH</span>
                       </div>
                       <button data-ui-control="" onClick={syncAllGoogle}
                         disabled={!!googleBusy}
@@ -1411,7 +1411,7 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Notificaciones nativas del sistema</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Aparecen fuera de la app con el icono de APHEKA</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Aparecen fuera de la app con el icono de POUH</div>
                       </div>
                       <button data-app-action="primary" data-ui-control="" onClick={async () => {
                         const { requestNativePermission } = await import('../../lib/notifications');
@@ -1424,7 +1424,7 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button data-app-action="primary" data-ui-control="" onClick={async () => {
                         const { sendNativeNotification } = await import('../../lib/notifications');
-                        sendNativeNotification('APHEKA', 'Notificación nativa de prueba enviada',{kind:'settings'});
+                        sendNativeNotification('POUH', 'Notificación nativa de prueba enviada',{kind:'settings'});
                       }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
                         <Bell size={14} /> Probar Nativa
                       </button>
@@ -1455,9 +1455,9 @@ export default function Ajustes() {
                 <AssistantWorkspace />
                 {/* App info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<AppWindow size={14} />} title="Sobre APHEKA" desc="Aplicación instalada" />
+                  <CardHeader icon={<AppWindow size={14} />} title="Sobre POUH" desc="Aplicación instalada" />
                   <div>
-                    <InfoRow label="Nombre" value={appInfo?.name || 'APHEKA'} mono />
+                    <InfoRow label="Nombre" value={appInfo?.name || 'POUH'} mono />
                     <InfoRow label="Versión" value={appInfo?.version || '6.7'} mono />
                     <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
                     <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} last />
@@ -1523,7 +1523,7 @@ export default function Ajustes() {
 
                 {/* App folders */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda APHEKA sus datos" />
+                  <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda POUH sus datos" />
                   {isTauri() ? (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {appDirs.map((d, i) => (
@@ -1632,7 +1632,7 @@ export default function Ajustes() {
                         {dataFolder}
                       </div>
                       {dataFolder && (
-                        <button data-app-action="secondary" data-ui-control="" onClick={() => openPath(dataFolder).catch(() => { })} title="Abrir la carpeta raíz de datos de APHEKA en el explorador"
+                        <button data-app-action="secondary" data-ui-control="" onClick={() => openPath(dataFolder).catch(() => { })} title="Abrir la carpeta raíz de datos de POUH en el explorador"
                           style={{ height: 26, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>
                           Abrir carpeta
                         </button>
@@ -1709,7 +1709,7 @@ export default function Ajustes() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-                  Conecta tu cuenta de Google para usar tu identidad en APHEKA.
+                  Conecta tu cuenta de Google para usar tu identidad en POUH.
                 </p>
                 <button data-ui-control="" onClick={handleGoogleSignIn} style={{ width: '100%', padding: '12px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }}><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/></svg>
@@ -2189,7 +2189,7 @@ function SliderRow({ label, value, min, max, step, unit, onChange, accent, displ
 
 // ── Zona de riesgo: desinstalación con confirmación escrita ──────────────────
 function UninstallSection() {
-  const CONFIRM = 'DESINSTALAR APHEKA';
+  const CONFIRM = 'DESINSTALAR POUH';
   const [text, setText] = useState('');
   const [wiping, setWiping] = useState(false);
   const [status, setStatus] = useState('');
@@ -2212,7 +2212,7 @@ function UninstallSection() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.22)', background: 'rgba(239,68,68,0.03)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Trash2 size={14} style={{ color: '#EF4444', flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>Desinstalar APHEKA</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>Desinstalar POUH</span>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
         Para desinstalar por completo: <b style={{ color: 'var(--text-secondary)' }}>1)</b> exporta tu respaldo arriba, <b style={{ color: 'var(--text-secondary)' }}>2)</b> escribe la confirmación y abre el desinstalador de Windows — elimina el programa y todos sus paquetes. Opcionalmente, borra también tus datos locales antes de salir.

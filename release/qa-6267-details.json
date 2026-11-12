@@ -1,0 +1,28 @@
+{
+  "mosaic": {
+    "heights": [
+      113,
+      229,
+      346,
+      390,
+      390,
+      171,
+      200,
+      200
+    ],
+    "columns": 2,
+    "ready": 12,
+    "total": 60,
+    "drag": "Reordered by dragging, updated persisted note order"
+  },
+  "calendarTask": "Monthly button opens task detail; Abrir en Entregas opens the matching task inspector",
+  "commands": [
+    "Capture own combination",
+    "Reject duplicates",
+    "Escape cancels cleanly",
+    "Search filters actions",
+    "Palette search + Enter opens command",
+    "Ordinary typing does not read shortcut storage"
+  ],
+  "errors": []
+}

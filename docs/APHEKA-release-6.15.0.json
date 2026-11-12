@@ -1,0 +1,85 @@
+{
+  "version": "6.15.0",
+  "installer": "verified",
+  "frontendTypecheck": "passed, production build",
+  "nativeUnitTests": {
+    "passed": 26,
+    "failed": 0
+  },
+  "noteEditor": {
+    "state": "passed",
+    "documentTypeRemoved": true,
+    "writingMeasure": "76ch",
+    "resourceSidebar": "files, links, folder, tags",
+    "undoRedo": "passed",
+    "immediateNavigation": "passed",
+    "pinnedNavigationAt900px": "passed, stacked companion and no overlap"
+  },
+  "playlists": "passed, compact gallery, detail, editing and song selection",
+  "discover": "passed, five per page, unified results without type tabs",
+  "lyrics": {
+    "synchronizedCandidateUpgrade": "passed",
+    "sharedRequestsAndIndependentCancellation": "passed",
+    "memoryAndDiskOfflineCache": "passed",
+    "maximumCacheEntries": 100,
+    "sidebarMaximumHeight": 520,
+    "visibleBounds": "passed",
+    "following": "passed in sidebar and full room across songs and 1366x740 viewport",
+    "roomFontMaximum": 34
+  },
+  "nativeExternalMedia": {
+    "metadata": "passed",
+    "mp4": "passed",
+    "mp3": "passed",
+    "oneCompletionPerFile": "passed",
+    "originalVideoPreserved": "passed",
+    "identicalVideoReused": "passed",
+    "codecs": [
+      "h264",
+      "aac",
+      "mp3"
+    ]
+  },
+  "installerHooks": "passed, isolated first/repeated install and exact legacy matching",
+  "installerToolReuse": "passed, SHA-256",
+  "personalData": "untouched",
+  "voiceTranscription": "deferred_by_user",
+  "productionValidation": "passed, notes editor and resources, compact playlists, five-song discovery, persistent view across room transitions, synced/cached lyrics in both views, offline local player",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.15.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80242357,
+    "sha256": "E33E8BA793DE34DA34CF29FEE67828A270736D79946C9C691FD1F1D1426EF037",
+    "modifiedAtUtc": "2026-10-27T17:47:32.8514715Z",
+    "sourceLatestEditUtc": "2026-10-27T17:35:59.4444532Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-BZKbwB1y.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-DSj-Bji1.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "nativeBuild": "passed",
+  "embeddedViews": 9,
+  "currentBrowserSdkEmbedded": true,
+  "toolCopies": 3,
+  "toolHashes": "passed",
+  "sourceSignatureCheckedByPackager": true,
+  "localMathEngineEmbedded": true,
+  "localMathFontsEmbedded": 19,
+  "playlistTypography": {
+    "computedFamily": "IBM Plex Sans",
+    "renderedFamily": "IBM Plex Sans Medm",
+    "customFontLoaded": true
+  }
+}

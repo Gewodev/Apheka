@@ -1,0 +1,52 @@
+{
+  "version": "6.10.0",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.10.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 79263033,
+    "sha256": "F61F1AC26532278169DA661EF2988A3F089F406D6D72041F479AD0A016991865",
+    "modifiedAtUtc": "2026-10-25T23:22:31.4289316Z",
+    "sourceLatestEditUtc": "2026-10-25T22:58:26.3210634Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-CdTG9D0a.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-DnRjc_GN.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-DUb6LAHu.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "checks": {
+    "productionFrontendBuild": true,
+    "nativeBuild": true,
+    "currentViewsEmbedded": 9,
+    "toolCopies": 3,
+    "toolHashes": true,
+    "sourceSignatureCheckedByPackager": true,
+    "hideablePlayerAndRoom": true,
+    "autoAndPinnedNavigation800To1440": true,
+    "optionalTaskTimeSameRow": true,
+    "nativeDownloadFixtureAndCancellation": true,
+    "realTitleArtistSearch": true,
+    "nativeFullscreenInputAndContinuousAudio": true,
+    "installerToolReuseFixture": true,
+    "productionRoomAndRealAudio": true,
+    "productionWorkspaceCrudAndOptionalTaskTime": true,
+    "packagedStdio": true,
+    "isolatedLegacyInstallerMigration": true
+  },
+  "limits": [
+    "No production installation over personal data was performed.",
+    "Physical hardware cursor rendering on every GPU cannot be certified by DOM/CDP tests.",
+    "Account-gated music services remain disconnected without project credentials.",
+    "Performance sampling uses isolated development data, not physical GPU measurement."
+  ]
+}

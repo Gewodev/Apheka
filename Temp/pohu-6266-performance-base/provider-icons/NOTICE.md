@@ -1,0 +1,1 @@
+Brand logo assets from Lobe Icons (MIT), @lobehub/icons-static-svg 1.101.0. Source: https://github.com/lobehub/lobe-icons . Logos remain trademarks of their respective owners; this is no endorsement. Assets stored locally; no runtime CDN requests.

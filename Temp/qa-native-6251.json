@@ -1,0 +1,19 @@
+{
+  "identifier": "com.apheka.nativeqa6251",
+  "productName": "APHEKA Native QA",
+  "build": {
+    "devUrl": "http://127.0.0.1:1423/scripts/native-voice-6251.html",
+    "beforeDevCommand": null
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "APHEKA Native QA",
+        "visible": false,
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}

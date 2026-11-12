@@ -1,0 +1,15 @@
+{
+  "home": {
+    "seconds": 5,
+    "sameView": true,
+    "sameImages": true,
+    "structuralMutations": 0,
+    "longTasks": []
+  },
+  "hidden": {
+    "secondsAdvanced": 3,
+    "hiddenStudyMutations": 0,
+    "longTasks": []
+  },
+  "errors": []
+}

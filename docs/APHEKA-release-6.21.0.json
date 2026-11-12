@@ -1,0 +1,58 @@
+{
+  "version": "6.21.0",
+  "installer": "verified",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.21.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80266653,
+    "sha256": "139E211F8223B11775273DC0C7F1812A57B1CFAF6698E999CA30C7449908215A",
+    "modifiedAtUtc": "2026-10-30T18:17:44.5790661Z",
+    "sourceLatestEditUtc": "2026-10-30T18:05:19.4467690Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index--NC9hRyp.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/index-CHg7_7Ah.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "embeddedViews": 9,
+  "toolCopies": 3,
+  "frontendBuild": "passed",
+  "tasks": "equal tinted urgency quadrants, one cyclic status control, compact unbordered list, pointer drag/drop and keyboard fallback in board, circular statistics, clickable colored picker, over-120-minute hint and linked timers",
+  "notes": "one-pixel borders; no overlaps at 900/1440; preserved note/task/study links and flush/save",
+  "music": "five-row queue, pointer and keyboard order, moving fifth row below visible window, manual intent persistence, independent shuffle/repeat, scoped online/artist playback and exact prior queue retained through discovery preview and automatic next",
+  "lyrics": "smooth follow, seeks, resize, first/last verses and returning from full cover",
+  "persistence": "last selected song, progress and manually edited queue survive full test-browser process restart; automatic tail rotates on app restart",
+  "course": "compact controls plus expanded preview with three metrics, 540px height, real productive study totals, no break/distraction inflation, recurring totals, reduced motion, completion/edit/delete-cancel and real Study link at 1366/900/420",
+  "home": "remote coverUrl shown for online recent songs",
+  "performance": {
+    "before": {
+      "sampleMilliseconds": 5000,
+      "youtubeClockReads": 45,
+      "blurredImages": 1,
+      "animations": 1,
+      "environment": "isolated Edge with controlled provider and 24 synthetic songs"
+    },
+    "after": {
+      "sampleMilliseconds": 5000,
+      "youtubeClockReads": 25,
+      "blurredImages": 0,
+      "animations": 0,
+      "environment": "isolated Edge with controlled provider and 24 synthetic songs"
+    },
+    "meaning": "Observed work of a controlled five-second lyric-clock sample, not total CPU/GPU percentage or a device-wide guarantee."
+  },
+  "personalData": "untouched",
+  "jev": "existing connector preserved, live account access still pending user key",
+  "limitations": "Controlled provider responses and isolated temporary Edge profiles. Network speed, recording permissions and lyric availability depend on providers."
+}

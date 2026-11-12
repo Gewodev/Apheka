@@ -1,0 +1,131 @@
+{
+  "checks": [
+    "Six concurrent closes are idempotent and leave no timer label",
+    "Reopen creates a fresh WebView after confirmed destruction",
+    "Actual Estudio and FloatingTimer components exercised, timer progression preserved"
+  ],
+  "samples": [
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 75,
+      "sessionTime": 123,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 87,
+      "sessionTime": 126,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 99,
+      "sessionTime": 129,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 80,
+      "sessionTime": 133,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 70,
+      "sessionTime": 135,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 65,
+      "sessionTime": 138,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 67,
+      "sessionTime": 141,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 70,
+      "sessionTime": 144,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 78,
+      "sessionTime": 147,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 85,
+      "sessionTime": 150,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "study-toggle",
+      "fullscreen": true,
+      "closeMs": 64,
+      "sessionTime": 153,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    },
+    {
+      "mode": "fullscreen",
+      "action": "timer-x",
+      "fullscreen": true,
+      "closeMs": 62,
+      "sessionTime": 156,
+      "pointerInput": true,
+      "cursorChecked": false,
+      "reason": "Pointer or foreground outside QA; hardware cursor assertion skipped"
+    }
+  ],
+  "errors": [],
+  "scope": "Real Windows/Tauri lifecycle through actual Estudio toggle and FloatingTimer X; registry absence and closed WebView targets verified. Native cursor state checked only over the QA foreground; GPU pixels not guaranteed. Close timings include automation/IPC overhead."
+}

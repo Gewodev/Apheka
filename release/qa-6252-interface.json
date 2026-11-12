@@ -1,0 +1,55 @@
+{
+  "providers": [
+    "openai",
+    "gemini",
+    "anthropic",
+    "deepseek",
+    "kimi",
+    "mistral",
+    "groq",
+    "xai",
+    "opencode",
+    "openrouter"
+  ],
+  "circles": [
+    {
+      "w": 160,
+      "h": 160,
+      "radius": "50%",
+      "image": {
+        "w": 158,
+        "h": 158
+      }
+    },
+    {
+      "w": 160,
+      "h": 160,
+      "radius": "50%",
+      "image": {
+        "w": 158,
+        "h": 158
+      }
+    },
+    {
+      "w": 160,
+      "h": 160,
+      "radius": "50%",
+      "image": null
+    },
+    {
+      "w": 160,
+      "h": 160,
+      "radius": "50%",
+      "image": null
+    }
+  ],
+  "scroll": {
+    "width": "none",
+    "web": "none"
+  },
+  "translucent": {
+    "background": "color(srgb 0.0392157 0.0392157 0.0470588 / 0.55)",
+    "blur": "blur(10px)"
+  },
+  "errors": []
+}

@@ -1,0 +1,25 @@
+{
+  "keyboardPriority": true,
+  "course": {
+    "width": 772,
+    "overflow": false,
+    "outsideViewport": false
+  },
+  "editor": {
+    "outline": "none",
+    "shadow": "none"
+  },
+  "savedEvent": {
+    "id": "348df243-562b-4f00-b49d-3ccc647c3b07",
+    "title": "Evento con repetición",
+    "date": "2026-12-05",
+    "allDay": false,
+    "startTime": "09:00",
+    "endTime": "10:30",
+    "color": "#E11D48",
+    "repeat": "weekly",
+    "repeatUntil": "2027-01-09",
+    "attachments": []
+  },
+  "errors": []
+}

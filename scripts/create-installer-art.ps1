@@ -12,14 +12,14 @@ $line = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml('#34393B'), 1)
 $name = [Drawing.Font]::new('Segoe UI', 22, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
 $small = [Drawing.Font]::new('Segoe UI', 11, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $label = [Drawing.Font]::new('Segoe UI', 15, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
-function Draw-Pohu($graphics,$color,[single]$x,[single]$y,[single]$scale) {
+function Draw-Pouh($graphics,$color,[single]$x,[single]$y,[single]$scale) {
   $state=$graphics.Save();$graphics.TranslateTransform($x,$y);$graphics.ScaleTransform($scale,$scale)
   $pen=[Drawing.Pen]::new($color,3.4);$pen.StartCap=$pen.EndCap=[Drawing.Drawing2D.LineCap]::Round
   try {
     $graphics.DrawLine($pen,1,28,1,1);$graphics.DrawLine($pen,1,1,12,1);$graphics.DrawArc($pen,4,1,17,16,270,180);$graphics.DrawLine($pen,12,17,1,17)
     $graphics.DrawEllipse($pen,31,1,22,27)
-    $graphics.DrawLine($pen,65,1,65,28);$graphics.DrawLine($pen,87,1,87,28);$graphics.DrawLine($pen,65,14,87,14)
-    $graphics.DrawLine($pen,100,1,100,17);$graphics.DrawArc($pen,100,6,22,22,0,180);$graphics.DrawLine($pen,122,17,122,1)
+    $graphics.DrawLine($pen,65,1,65,17);$graphics.DrawArc($pen,65,6,22,22,0,180);$graphics.DrawLine($pen,87,17,87,1)
+    $graphics.DrawLine($pen,100,1,100,28);$graphics.DrawLine($pen,122,1,122,28);$graphics.DrawLine($pen,100,14,122,14)
   } finally {$pen.Dispose();$graphics.Restore($state)}
 }
 try {
@@ -38,12 +38,12 @@ try {
         $caption = [Drawing.Font]::new('Segoe UI', 10, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
         try {
           $g.DrawImage($logo, 22, 24, 58, 58)
-          Draw-Pohu $g $light.Color 22 99 1.0
+          Draw-Pouh $g $light.Color 22 99 1.0
           $g.FillRectangle($accent, 23, 136, 22, 3)
           $g.DrawString("Tu espacio.`nA tu ritmo.", $label, $light, [Drawing.RectangleF]::new(20, 155, 128, 55))
           $g.DrawString('Estudio, Charvis y música', $caption, $muted, [Drawing.RectangleF]::new(21, 218, 124, 32))
           $g.DrawLine($line, 23, 259, 141, 259)
-          $g.DrawString(('POHU ' + $version), $small, $light, 20, 269)
+          $g.DrawString(('POUH ' + $version), $small, $light, 20, 269)
           $g.DrawString('Hecho por Gewodev', $caption, $muted, 21, 292)
         } finally { $light.Dispose(); $caption.Dispose() }
       } else {
@@ -51,7 +51,7 @@ try {
         $caption = [Drawing.Font]::new('Segoe UI', 9, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
         try {
           $g.DrawImage($logo, 8, 13, 30, 30)
-          Draw-Pohu $g $ink.Color 45 13 0.64
+          Draw-Pouh $g $ink.Color 45 13 0.64
           $g.DrawString(('Escritorio · ' + $version), $caption, $muted, 46, 33)
         } finally { $headerName.Dispose(); $caption.Dispose() }
       }
@@ -62,4 +62,4 @@ try {
   $logo.Dispose(); $ink.Dispose(); $muted.Dispose(); $accent.Dispose(); $line.Dispose()
   $name.Dispose(); $small.Dispose(); $label.Dispose()
 }
-Write-Output 'POHU installer artwork generated; original logo preserved.'
+Write-Output 'POUH installer artwork generated; original logo preserved.'

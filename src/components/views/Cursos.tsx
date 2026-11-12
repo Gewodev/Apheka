@@ -2112,6 +2112,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   useEffect(() => { localStorage.setItem('owa_show_course_notes', JSON.stringify(showCourseNotesInOverview)); }, [showCourseNotesInOverview]);
   const eyePressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overviewNoteContainerRef = useRef<HTMLDivElement>(null);
+  const overviewNoteMeasure=useObservedSize<HTMLDivElement>();
+  const bindOverviewNotes=useCallback((node:HTMLDivElement|null)=>{overviewNoteContainerRef.current=node;overviewNoteMeasure.ref(node);},[overviewNoteMeasure.ref]);
   // Inline note creator state (Mode 1)
   const [overviewNoteContent, setOverviewNoteContent] = useState('');
   const overviewNoteRef = useRef<HTMLTextAreaElement>(null);
@@ -3976,8 +3978,9 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   {filteredCourseNotes.length > 0 ? (
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragCancel={()=>{notesDragRef.current=false;}} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
-                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px 8px', maxHeight: 'clamp(300px, 52vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain' }} className="course-notes-scroll">
-                          {expandedFirst.map(n => {
+                        <div ref={bindOverviewNotes} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px 8px', maxHeight: 'clamp(300px, 52vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain' }} className="course-notes-scroll">
+                          {(() => {
+                            const cards=expandedFirst.map(n => {
                             const isHighlighted = overviewNoteHighlights.includes(n.id);
                             const isCourseNote = !n.isCoursePrivate;
                             // En "Mi conocimiento" las notas NO se editan; los apuntes
@@ -4077,7 +4080,13 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                 )}
                               </SortableWrapper>
                             );
-                          })}
+                          });
+                            const count=Math.max(1,Math.min(4,Math.floor(((overviewNoteMeasure.size?.w||260)+14)/274)));
+                            const columns:React.ReactNode[][]=Array.from({length:count},()=>[]),positions=new Map(sortedIds.map((id,index)=>[id,index]));
+                            const hasExpanded=expandedFirst[0]?.id===selectedOverviewNoteId;
+                            cards.forEach((card,index)=>{if(index===0&&hasExpanded)return;columns[(positions.get(expandedFirst[index].id)||0)%count].push(card);});
+                            return <>{hasExpanded&&<div className="course-note-mosaic-expanded">{cards[0]}</div>}<div className="course-note-mosaic" style={{gridTemplateColumns:`repeat(${count},minmax(0,1fr))`}}>{columns.map((column,index)=><div className="course-note-mosaic-column" key={index}>{column}</div>)}</div></>;
+                          })()}
                         </div>
                       </SortableContext>
                     </DndContext>
@@ -6415,7 +6424,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   ) : (
                     /* -- IMPORT -- */
                     <div>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde APHEKA.</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde POUH.</p>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: 8, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, transition: 'all 200ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.color = course.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>

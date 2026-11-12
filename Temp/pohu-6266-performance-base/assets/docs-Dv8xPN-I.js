@@ -1,0 +1,9 @@
+import{apiFetch as o}from"./index-0DR8SHGc.js";import"./index-ESh0ZWEV.js";import"./anim-jyow7flR.js";import"./charts-DKJleKn1.js";import"./tauri-CWEvInMW.js";import"./storage-DwnyWBFG.js";import"./audio-meta-CT9Hv6Ta.js";import"./date-COeAPjBE.js";async function i(s,t){const e=await o("/docs/v1/documents",{method:"POST",body:JSON.stringify({title:s})}),n=[{insertText:{location:{index:1},text:t}}];return await o(`/docs/v1/documents/${e.documentId}:batchUpdate`,{method:"POST",body:JSON.stringify({requests:n})}),{documentId:e.documentId,documentUrl:`https://docs.google.com/document/d/${e.documentId}/edit`}}async function a(s,t){const e=await o("/sheets/v4/spreadsheets",{method:"POST",body:JSON.stringify({properties:{title:s},sheets:[{properties:{title:"Data"}}]})});return t.length>0&&await o(`/sheets/v4/spreadsheets/${e.spreadsheetId}/values/A1:append`,{method:"POST",body:JSON.stringify({values:t,majorDimension:"ROWS"}),headers:{"Content-Type":"application/json"}}),{spreadsheetId:e.spreadsheetId,spreadsheetUrl:e.spreadsheetUrl}}async function y(s){const t=s.map(n=>`${n.title}
+${"=".repeat(n.title.length)}
+
+${n.content||"(sin contenido)"}
+
+---
+`).join(`
+`);return(await i("APHEKA - Notas",t)).documentUrl}async function S(s,t){return(await a("APHEKA - Estadísticas",[s,...t])).spreadsheetUrl}async function T(s,t){return(await o("/slides/v1/presentations",{method:"POST",body:JSON.stringify({title:s,slides:[{pageElements:[{shape:{shapeType:"TEXT_BOX",text:{textElements:[{textRun:{content:t.join(`
+• `),style:{fontSize:{magnitude:18,unit:"PT"}}}}]}},size:{width:{magnitude:600,unit:"PT"},height:{magnitude:400,unit:"PT"}},transform:{scaleX:1,scaleY:1,translateX:50,translateY:50,unit:"PT"}}]}]})})).presentationUrl}export{i as createDocument,a as createSpreadsheet,y as exportNotesToDoc,S as exportStatsToSheet,T as exportStudyPlanToSlides};

@@ -1,0 +1,145 @@
+Esto es lo que encontré investigando proyectos externos que replican la interfaz. Un aviso importante: el frontend oficial de Claude no es público. Todo lo que sigue sale de réplicas de código abierto, librerías de componentes y extracciones de diseño hechas por terceros. Esas extracciones admiten ellas mismas que no son oficiales y que colores, fuentes y espaciados pueden no ser exactos. Úsalo como base sólida, no como copia 1:1.
+
+1. Proyectos de referencia
+Proyecto	Qué aporta
+Open Artifacts	Clon de código abierto de Claude.ai que genera artefactos, con Vercel AI SDK; el visor de artefactos es un renderizador separado.
+Open Claude	Parsea etiquetas de artefactos y bloques de código de varios proveedores, y muestra en vivo los tags <think>/<thinking> junto con los campos nativos de razonamiento de las APIs.
+assistant-ui (ejemplo de artefactos)	Implementación en React de artefactos en un panel lateral, con vista previa en un iframe aislado.
+AI Elements (Vercel)	Componentes sobre shadcn/ui: message, conversation, reasoning, chain-of-thought, artifact, prompt-input, etc. Solo funciona con variables CSS.
+Streamdown	Sustituto de react-markdown pensado para streaming: tolera Markdown incompleto, soporta tablas GFM, KaTeX, Mermaid y código con Shiki. 
+github.com%2F13point5%2Fopen artifacts
+ +4
+
+Mi recomendación: AI Elements + assistant-ui + Streamdown para la estructura, y tu propio CSS para el aspecto.
+
+2. Anatomía de la pantalla
+
+Tres zonas en una rejilla CSS:
+
+Barra izquierda: historial de chats, colapsable.
+Columna central: conversación con ancho máximo (~720 px) centrada, y el compositor fijo abajo.
+Panel derecho: aparece solo cuando hay un artefacto o documento y empuja la columna central.
+css
+.app { display:grid; height:100dvh; grid-template-columns:260px minmax(0,1fr) 0;
+       transition:grid-template-columns .3s ease; }
+.app[data-panel="open"] { grid-template-columns:260px minmax(0,1fr) minmax(420px,45%); }
+.thread { max-width:720px; margin:0 auto; padding:0 16px; }
+.panel { border-left:1px solid var(--line); overflow:hidden; min-width:0; }
+@media (max-width:900px){ .app{grid-template-columns:minmax(0,1fr)} .panel{position:fixed;inset:0} }
+
+En móvil el panel pasa a pantalla completa en vez de columna.
+
+3. Mensajes y partes
+
+La idea central, que usan assistant-ui y AI SDK: un mensaje del asistente es una lista de partes tipadas (reasoning, text, tool-call, source, file), no una cadena de texto. Tú decides cómo pintar cada una:
+
+tsx
+<MessagePrimitive.Parts>
+  {({ part }) => {
+    if (part.type === 'reasoning') return <Reasoning {...part} />;
+    if (part.type === 'text')      return <Response>{part.text}</Response>;
+    if (part.type === 'tool-call') return part.toolUI ?? <ToolFallback {...part} />;
+  }}
+</MessagePrimitive.Parts>
+
+Esto sigue el patrón documentado de assistant-ui, donde las partes de tipo tool-call exponen la UI registrada para esa herramienta, o null si no hay ninguna. 
+assistant-ui
+
+Diferencias visuales entre usuario y asistente:
+
+Usuario: burbuja o bloque sutil con fondo tintado, alineado a la derecha, tipografía sans.
+Asistente: sin burbuja ni avatar pesado. El texto fluye sobre el fondo de la página, en serif.
+4. Pensamiento, herramientas y fuentes
+
+Los componentes ya existen. Los dos que más te importan:
+
+Agrupación de pasos consecutivos. assistant-ui tiene ReasoningGroup, que envuelve una serie de partes de razonamiento consecutivas, y ToolGroup, que envuelve una serie de llamadas a herramientas consecutivas y recibe sus índices y su estado. Esto es lo que produce el bloque único “Pensó durante X s” que describía antes. 
+assistant-ui
+assistant-ui
+UI por herramienta (generativa). makeAssistantToolUI registra componentes que dibujan la ejecución de una herramienta, por ejemplo una webSearch que muestra título, URL y snippet. Cada herramienta (búsqueda, documento, proveedor) tiene su componente; si no hay uno, cae a ToolFallback. 
+assistant-ui
+
+AI Elements aporta además Sources con SourcesTrigger count={n} y SourcesContent, que es el desplegable de “n fuentes” tipo chips. 
+smithery
+
+5. Archivos adjuntos y archivos creados
+
+Adjuntos del usuario: assistant-ui incluye una guía de adjuntos para imágenes, documentos y otros archivos en los mensajes. El patrón de UI es: 
+assistant-ui
+
+Chips en el compositor con miniatura, nombre y botón de quitar, antes de enviar.
+Tarjeta compacta (icono por tipo, nombre, tamaño) dentro del mensaje ya enviado.
+Al hacer clic en la tarjeta, se abre el visor en el panel derecho.
+En el backend, el archivo se guarda y se pasa al modelo como bloque document o image, o su texto extraído como contexto.
+
+Archivos creados (artefactos y documentos): una descripción independiente del panel de Claude indica que el panel tiene dos modos, Preview y Code, y botones inferiores para descargar, copiar, publicar y ver el historial de versiones. Para replicarlo: 
+fast
+
+Una herramienta create_file o create_artifact con { id, type, title, content }.
+En el chat se muestra una tarjeta compacta (título, tipo, “Abrir”). Al hacer clic se abre el panel.
+Panel con cabecera (título, pestañas Vista previa/Código, menú de acciones) y cuerpo con el visor según el tipo:
+HTML/React/SVG → <iframe sandbox="allow-scripts">.
+Markdown/documento → visor de texto con tipografía de lectura.
+Código → resaltado con Shiki.
+Historial de versiones: guarda cada create/update con su número y permite volver atrás.
+Por seguridad, Open Artifacts separa el visor en un servicio distinto (otro origen). Es buena práctica: así el código generado no comparte origen con tu app.
+6. Tipografía y tokens
+
+Esto sí se puede documentar con bastante confianza. Un CSS público de Anthropic define --font-claude-response como la serif de Anthropic y --font-user-message como la sans de la interfaz, además de una mono. O sea, el reparto es: 
+anthropic
+
+Uso	Fuente de Anthropic	Sustituto libre
+Respuesta del asistente	Anthropic Serif	Lora, Source Serif 4 o Georgia
+Mensaje del usuario y UI	Anthropic Sans	Inter
+Código	Anthropic Mono	JetBrains Mono o IBM Plex Mono
+
+Una extracción de terceros menciona como equivalentes abiertos Tiempos/Lora para la serif, Inter para la sans y JetBrains Mono para la mono. Ten en cuenta que son tipografías propietarias, así que no las copies; usa los sustitutos. 
+kombai
+
+Los valores de color y forma que circulan (extraídos por terceros, no oficiales) son un lienzo crema 
+#faf9f5 y un acento coral 
+#cc785c (según una de esas extracciones), y radios de 4, 10 y 24 px para base, campo y tarjeta (según otra). Punto de partida: 
+shadcn
+kombai
+
+css
+:root{
+  --bg:#faf9f5; --ink:#141413; --ink-2:#5e5d59; --line:rgba(31,30,29,.15);
+  --accent:#cc785c;
+  --font-response:"Lora",Georgia,serif;
+  --font-ui:"Inter",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --r-field:10px; --r-card:24px;
+}
+.answer{ font:400 16.5px/1.7 var(--font-response); color:var(--ink); }
+.user-msg,.ui{ font:400 15px/1.5 var(--font-ui); }
+.process{ font:400 13px/1.45 var(--font-ui); color:var(--ink-2); }
+
+Define también el modo oscuro con las mismas variables invertidas, para que todos los componentes lo hereden sin tocar nada más.
+
+7. Tablas, código y exportación
+
+Streamdown resuelve casi todo. Por defecto ofrece botón de copiar en bloques de código, de descargar en tablas, y controles de copia, descarga SVG, pantalla completa y zoom en diagramas Mermaid. Se configura así: 
+smithery
+
+tsx
+<Streamdown isAnimating={status === 'streaming'}
+  controls={{ code: true, table: true, mermaid: { copy:true, download:true, fullscreen:true } }}>
+  {part.text}
+</Streamdown>
+
+Estilo de tabla “limpio”: sin bordes verticales, encabezado en gris pequeño en versalitas o negrita ligera, línea fina entre filas, overflow-x:auto en un contenedor para que la tabla nunca rompa el ancho del chat, y los botones de copiar/descargar visibles solo al pasar el cursor.
+
+Para exportar más allá de lo que da Streamdown:
+
+Mensaje completo: botón “Copiar” (Markdown) y “Descargar .md”.
+Tabla: convertir a CSV o XLSX en el cliente.
+Documento: exportar a PDF o DOCX desde el servidor (por ejemplo, con una librería de generación de DOCX y un renderizador de PDF) y devolver una URL de descarga.
+8. Orden de construcción
+Base visual: tokens, tipografías, layout de 3 zonas (secciones 2 y 6).
+Chat con partes: AI SDK useChat más renderer por partes (sección 3).
+Respuesta: Streamdown con tus estilos.
+Proceso: Reasoning, ReasoningGroup, ToolGroup, Sources (sección 4).
+Herramientas con UI propia: búsqueda web, proveedor, documento.
+Adjuntos y panel de artefactos con visor aislado (sección 5).
+Exportación (sección 7).

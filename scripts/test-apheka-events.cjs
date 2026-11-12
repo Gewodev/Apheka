@@ -1,0 +1,45 @@
+const assert=require('node:assert/strict');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+(async()=>{
+ const browser=await chromium.launch({channel:'msedge',headless:true});
+ try {
+ const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:1420',{waitUntil:'domcontentloaded'});await page.waitForTimeout(1200);
+ await page.getByRole('button',{name:'Planificador',exact:true}).click();
+ await page.getByRole('button',{name:'Nuevo Evento',exact:true}).click();
+ await page.getByPlaceholder('Ej: Reunión de proyecto, Examen final...').fill('Evento de regresión APHEKA');
+ await page.getByLabel('Duración en minutos',{exact:true}).fill('15');
+ await page.getByLabel('Duración en minutos',{exact:true}).press('Tab');
+ assert.equal(await page.getByLabel('Duración en minutos',{exact:true}).inputValue(),'15');
+ await page.getByRole('button',{name:'60 min',exact:true}).click();
+ await page.setViewportSize({width:1200,height:800});
+ const footer=await page.getByRole('button',{name:'Crear Evento',exact:true}).boundingBox();
+ assert.ok(footer && footer.y+footer.height<=800,'event footer fits a desktop window');
+ await page.screenshot({path:'docs/apheka-evento-compacto.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:960});
+ console.log('PASS numeric editing and compact desktop dialog');
+ await page.screenshot({path:'docs/apheka-evento.png',fullPage:true});
+ await page.getByLabel('Todo el día',{exact:true}).check();
+ await page.getByRole('button',{name:'Crear Evento',exact:true}).click();
+ await page.getByRole('button',{name:'Inicio',exact:true}).click();
+ await page.getByRole('button',{name:'Planificador',exact:true}).click();
+ await page.getByText('Evento de regresión APHEKA',{exact:true}).click();
+ await page.getByRole('button',{name:'Destacar en Inicio',exact:true}).click();
+ await page.getByRole('button',{name:'Inicio',exact:true}).click();
+ await page.getByRole('button',{name:'Quitar destacado',exact:true}).waitFor();
+ await page.waitForTimeout(4000);
+ assert.ok((await page.locator('body').innerText()).includes('Evento de regresión APHEKA'));
+ await page.reload();await page.getByRole('button',{name:'Quitar destacado',exact:true}).waitFor();
+ assert.equal(await page.getByText('Evento de regresión APHEKA',{exact:true}).count(),1,'featured event is not duplicated in upcoming');
+ await page.screenshot({path:'docs/apheka-inicio.png',fullPage:true});
+ console.log('PASS event survives immediate navigation; pin survives >3s and reload');
+ await page.getByRole('button',{name:'Quitar destacado',exact:true}).click();
+ await page.reload();await page.waitForTimeout(1000);
+ assert.equal(await page.getByRole('button',{name:'Quitar destacado',exact:true}).count(),0);
+ assert.equal(await page.getByText('Evento de regresión APHEKA',{exact:true}).count(),1,'unpin returns event to upcoming');
+ console.log('PASS unpin stays cleared after reload and event returns to upcoming without duplication');
+ console.log('ERRORS',errors);
+ assert.deepEqual(errors,[]);
+ } finally { await browser.close(); }
+})().catch(e=>{console.error(e);process.exitCode=1});

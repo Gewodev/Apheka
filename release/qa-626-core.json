@@ -1,0 +1,46 @@
+{
+  "lyrics": [
+    {
+      "time": 1,
+      "text": "Si no es hoy mañana tal vez"
+    },
+    {
+      "time": 3,
+      "text": "Pero algún día voy a tenerte"
+    }
+  ],
+  "repaired": "mañana y energía",
+  "unique": [
+    "AAAAAAAAAAA",
+    "DDDDDDDDDDD"
+  ],
+  "accepted": [
+    "AAAAAAAAAAA",
+    "BBBBBBBBBBB"
+  ],
+  "played": [
+    "f2",
+    "f1",
+    "f0",
+    "f1",
+    "f2",
+    "f1",
+    "f2",
+    "f0",
+    "f1",
+    "f0",
+    "f2",
+    "f0"
+  ],
+  "skip": {
+    "id": "f2",
+    "queue": []
+  },
+  "rag": {
+    "method": "bm25-phrase-v2",
+    "fragments": 2,
+    "scoped": 0,
+    "cancelled": true
+  },
+  "invalid": 0
+}

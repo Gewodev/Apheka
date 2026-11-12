@@ -1,0 +1,60 @@
+{
+  "version": "6.7.4",
+  "tests": {
+    "rust": 16,
+    "typescript": true,
+    "mcpExistingFlows": true,
+    "studyDeckModes": 8,
+    "otherStudyTechniques": 25,
+    "mcpTools": 21,
+    "mcpEntities": 19,
+    "pdfBrowserArguments": [
+      "Chrome",
+      "Edge",
+      "Firefox",
+      "Brave",
+      "Opera"
+    ],
+    "actualAudioFullscreenCycles": 3,
+    "courseLayoutWidths": [
+      800,
+      900,
+      1000,
+      1200,
+      1440
+    ],
+    "sidebarStates": [
+      "expanded",
+      "collapsed"
+    ],
+    "nativeIntermittentPointerVisuallyConfirmed": false
+  },
+  "installer": "release/apheka_FINAL.exe",
+  "guide": "docs/APHEKA-6.7.4.md",
+  "build": "complete",
+  "sha256": "90FF5DAF320B803174B0807C9C75057BE8417FBB8BD60CC767CC9A0794E7E805",
+  "bytes": 78820543,
+  "installerManifest": {
+    "product": "APHEKA",
+    "version": "6.7.4",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 78820543,
+    "sha256": "90FF5DAF320B803174B0807C9C75057BE8417FBB8BD60CC767CC9A0794E7E805",
+    "modifiedAtUtc": "2026-10-23T22:02:19.6897449Z",
+    "sourceLatestEditUtc": "2026-10-23T21:41:10.2858228Z",
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-F8O8t_pb.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-q6vo2bq9.js",
+      "assets/storage-Dmwemyxp.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-CBAfKGfK.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "environment": "isolated headless Edge; production frontend; 150 tasks / 250 sessions; external network disabled; renderer CPU time, not laptop power/temperature",
+  "report": [
+    {
+      "view": "tareas",
+      "scrollFrames": 45,
+      "scrollFrameP95Ms": 44.9,
+      "scrollFrameMaxMs": 55.8,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 18,
+      "scriptMs": 2,
+      "layoutMs": 1,
+      "heapMiB": 13,
+      "domNodes": 4154
+    },
+    {
+      "view": "tareas",
+      "scrollFrames": 45,
+      "scrollFrameP95Ms": 9.4,
+      "scrollFrameMaxMs": 10.4,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 20,
+      "scriptMs": 2,
+      "layoutMs": 2,
+      "heapMiB": 13,
+      "domNodes": 4153
+    },
+    {
+      "view": "tareas",
+      "scrollFrames": 45,
+      "scrollFrameP95Ms": 9.9,
+      "scrollFrameMaxMs": 11.2,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 29,
+      "scriptMs": 4,
+      "layoutMs": 2,
+      "heapMiB": 13,
+      "domNodes": 4154
+    }
+  ]
+}

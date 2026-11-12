@@ -1,11 +1,12 @@
 {
   "identifier": "com.owa.studio",
-  "productName": "POHU",
-  "version": "6.26.6",
+  "productName": "POUH",
+  "version": "6.26.7",
   "bundle": {
     "resources": {
       "resources/asr/": "asr/"
     },
     "useLocalToolsDir": true
-  }
+  },
+  "mainBinaryName": "POUH"
 }

@@ -1187,7 +1187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         candidates.sort((a, b) => b.score - a.score);
         const winner = candidates[0];
         if (!winner && storageReadFailed) {
-          addNotification('No se pudieron cargar tus datos. Cierra y vuelve a abrir APHEKA para reintentar. No se ha sobrescrito el almacenamiento.', 'error');
+          addNotification('No se pudieron cargar tus datos. Cierra y vuelve a abrir POUH para reintentar. No se ha sobrescrito el almacenamiento.', 'error');
           return;
         }
         if (winner) {

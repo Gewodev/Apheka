@@ -1,0 +1,67 @@
+{
+  "version": "6.19.0",
+  "installer": "verified",
+  "frontendTypecheck": "passed",
+  "scope": [
+    "shared action UI",
+    "notes and course notes",
+    "lyrics cache and playback",
+    "playlist shuffle scope",
+    "catalog ranking"
+  ],
+  "sourceValidation": {
+    "notes": "passed full width, composed controls, selection, highlight, metadata/history, tables, resources and saving",
+    "courseNotes": "passed shared toolbar, highlight, Unicode/spaces and reload",
+    "actions": "passed eight views 1440/900, 13 visible actions compared to Importar, no horizontal overflow",
+    "lyrics": "passed normalized cache identity, actual duration, no downgrade, reload/offline, incompatible recording rejected",
+    "lyricFollowing": "passed isolated natural start, smooth advance, seek, resize and full cover; timing assertion under concurrent test load was rerun in isolation",
+    "queue": "passed five rows, reorder/removal/backfill, shuffle and repeat",
+    "playlistScope": "passed playlist shuffle and repeat-all without leaving the collection",
+    "youtubeRecovery": "passed controlled transient error and same-recording catalog alternative, cached on return and single iframe",
+    "recommendations": "passed category filters, real localized popularity from stored provider response, familiarity and relevance priority",
+    "mcp": "passed domain CRUD, editor synchronization, concurrent edits, nested study tools, sources and persistence"
+  },
+  "productionValidation": {
+    "notes": "passed full-width editor, composed controls, history/metadata, highlight, tables and persistence",
+    "historyRestore": "passed revisions with identical opening, previous version restored and retained on reload",
+    "courseNotes": "passed shared toolbar, writing and reload",
+    "actions": "passed eight views 1440/900, 14 visible shared actions and no horizontal overflow",
+    "youtube": "passed controlled retry, same-recording alternative, return to cached route, single iframe and playlist shuffle/repeat",
+    "discover": "passed lookup, save/unsave, favorite promotes to library and persistent cover",
+    "lyricsAndThemes": "passed repeated themes/custom colors, five-song queue reorder/removal, shuffle/repeat, natural-start smooth lyric follow, seek/resize and full cover"
+  },
+  "personalData": "untouched",
+  "limitations": "Provider availability and embedding restrictions remain external; precise lyrics require timing for the actual recording. Recovery tested with controlled responses, no specific failing recording supplied.",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.19.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80224510,
+    "sha256": "D6C89A7ADCF53C6F5BB35F9D3712D3648D1ACE9D0BBBED41DDE26C5FFEFFEC26",
+    "modifiedAtUtc": "2026-10-29T00:11:35.0486823Z",
+    "sourceLatestEditUtc": "2026-10-29T00:00:12.7361534Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-DIDUIjeY.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-Bmr9ctit.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "nativeBuild": "passed",
+  "embeddedViews": 9,
+  "currentBrowserSdkEmbedded": true,
+  "toolCopies": 3,
+  "toolHashes": "passed",
+  "sourceSignatureCheckedByPackager": true,
+  "localMathEngineEmbedded": true,
+  "localMathFontsEmbedded": 19
+}

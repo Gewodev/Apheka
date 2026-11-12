@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "noteReadsOnOpen": 400,
+    "noteReadsWhileTyping": 18800,
+    "scriptDurationMs": 399
+  },
+  "current": {
+    "noteReadsOnOpen": 0,
+    "noteReadsWhileTyping": 0,
+    "scriptDurationMs": 124
+  }
+}

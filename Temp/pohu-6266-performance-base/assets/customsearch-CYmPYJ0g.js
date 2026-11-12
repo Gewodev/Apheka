@@ -1,0 +1,1 @@
+async function s(e,n=10){return[]}async function u(e){return(await s(`${e} study guide tutorial`,5)).map(t=>({title:t.title,url:t.link,description:t.snippet}))}async function r(e){return(await s(`${e} documentation API reference`,5)).map(t=>({title:t.title,url:t.link}))}export{r as searchDocumentation,u as searchStudyResources,s as searchWeb};

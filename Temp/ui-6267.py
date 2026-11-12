@@ -1,0 +1,4 @@
+from pathlib import Path
+s=Path('scripts/test-ui-6266.cjs').read_text(encoding='utf-8').replace('6266','6267');s=s.replace("await page.getByLabel('Atajo de Crear tarea',{exact:true}).selectOption('Ctrl+Alt+T');","await page.getByRole('button',{name:'Personalizar atajo de Crear tarea',exact:true}).click();await page.getByLabel('Capturar atajo de Crear tarea',{exact:true}).press('Control+Alt+t');");Path('scripts/test-ui-6267.cjs').write_text(s,encoding='utf-8')
+# Reuse the established real AppProvider harness without relying on a previous release filename.
+s=Path('scripts/runtime-6266.tsx').read_text(encoding='utf-8');Path('scripts/runtime-6267.tsx').write_text(s,encoding='utf-8');s=Path('scripts/runtime-6266.html').read_text(encoding='utf-8').replace('runtime-6266.tsx','runtime-6267.tsx');Path('scripts/runtime-6267.html').write_text(s,encoding='utf-8')

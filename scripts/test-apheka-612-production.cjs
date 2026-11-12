@@ -1,0 +1,2 @@
+const {spawnSync}=require('node:child_process');
+for(const file of ['scripts/test-apheka-612-music.cjs','scripts/test-apheka-612-production-room.cjs','scripts/test-apheka-612-layout.cjs']){const result=spawnSync(process.execPath,[file],{stdio:'inherit',windowsHide:true,env:{...process.env,APHEKA_QA_URL:'http://127.0.0.1:1421',APHEKA_TEST_URL:'http://127.0.0.1:1421'}});if(result.error)throw result.error;if(result.status!==0)process.exit(result.status||1);}console.log('PASS 6.12 production music, reversible saving, playlist selection, player, layouts and settings.');

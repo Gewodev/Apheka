@@ -1,0 +1,62 @@
+{
+  "version": "6.19.1",
+  "installer": "verified",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.19.1",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80231354,
+    "sha256": "32B047E46BE0C55DFF608DDA39ECDBBFBAA8CDB07D778978A16136CC47C2982F",
+    "modifiedAtUtc": "2026-10-29T23:10:38.5962718Z",
+    "sourceLatestEditUtc": "2026-10-29T23:00:43.2652527Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-r5BW_o3C.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-4zDOMQ-O.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "embeddedViews": 9,
+  "toolCopies": 3,
+  "frontendBuild": "passed",
+  "courseEssentials": "passed four format controls in a shared header, Ctrl+Z/Y, formatting, undo/redo, preserved headings, Unicode/spaces, save/reload and 900/1440 layout",
+  "notesRegression": "passed",
+  "courseProduction": "passed overview and notebook, aligned actions and keyboard history after autosave",
+  "musicRegression": "passed controlled YouTube recovery, one iframe, playlist-scoped shuffle/repeat, smooth lyric follow and full cover",
+  "observedSizeAndHiddenClocks": "passed",
+  "performanceBefore": {
+    "audioProgressUpdates": 20,
+    "homeDuringAudioProgress": {
+      "commits": 20,
+      "renderMs": 225.9000000357628
+    },
+    "homeIdle2300ms": {
+      "commits": 4,
+      "renderMs": 46.40000003576279
+    },
+    "course400msPolls": 1
+  },
+  "performanceAfter": {
+    "audioProgressUpdates": 20,
+    "homeDuringAudioProgress": {
+      "commits": 0,
+      "renderMs": 0
+    },
+    "homeIdle2300ms": {
+      "commits": 2,
+      "renderMs": 0.800000011920929
+    },
+    "course400msPolls": 0
+  },
+  "personalData": "untouched",
+  "limitations": "Synthetic Edge workload. Does not guarantee zero lag with every library, device or network."
+}

@@ -1,0 +1,9 @@
+import assert from 'node:assert/strict';
+import {libraryRadioOrder,nextMusicSelection,isLibraryTrack} from '../src/lib/musicRadio.ts';
+const track=(id:string,artist:string,extra={})=>({id,title:id,artist,duration:30,source:'local' as const,isFavorite:false,listenedTime:0,...extra});
+const tracks=[track('a','A'),track('b','A'),track('c','B'),track('d','C'),track('preview','Outside',{source:'youtube',librarySaved:false}),track('remote','D',{source:'youtube'})];
+const radio=libraryRadioOrder(tracks,'a',['a','c'],{b:100,c:0,d:0},true,()=>.5);assert.deepEqual(new Set(radio),new Set(['b','c','d']));assert.notEqual(radio[0],'b','artist variety and lower play counts matter');assert.equal(isLibraryTrack(tracks[4]),false);assert.equal(isLibraryTrack(tracks[0]),true);
+const state={tracks,currentId:'a',queue:['preview','c'],sourcePool:['preview'],shuffle:true,repeat:'none' as const,history:['a'],counts:{b:20},offline:true};assert.equal(nextMusicSelection(state,true).id,'c');assert.equal(nextMusicSelection({...state,queue:[]}).queue.includes('preview'),false);assert.equal(nextMusicSelection({...state,queue:[]}).id==='remote',false);
+assert.equal(nextMusicSelection({...state,shuffle:false,queue:[],sourcePool:['a','b','c'],currentId:'c',repeat:'none'}).id,null);assert.equal(nextMusicSelection({...state,shuffle:false,queue:[],sourcePool:['a','b','c'],currentId:'c',repeat:'all'}).id,'a');assert.equal(nextMusicSelection({...state,shuffle:false,queue:['b'],repeat:'one'}).id,'a');assert.equal(nextMusicSelection({...state,shuffle:false,queue:['b'],repeat:'one'},true).id,'b');
+for(let i=0;i<100;i++){const result=libraryRadioOrder(tracks,'a',['a'],{},false);assert.equal(new Set(result).size,result.length);assert.ok(!result.includes('preview')&&!result.includes('a'));}
+console.log('PASS library-only radio, preview exclusion, offline filtering, artist variety, unique sampling and shared next/repeat semantics.');

@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const base=process.env.APHEKA_QA_URL||'http://127.0.0.1:1422';
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
+ const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(base+'/scripts/apheka-selection-preview.html');await page.waitForFunction(()=>window.__full?.app.hydrated);await page.waitForTimeout(200);
+ const before=await page.evaluate(()=>({slice:window.__slice.renders,full:window.__full.renders}));
+ await page.evaluate(()=>window.__pulse());const after=await page.evaluate(()=>({slice:window.__slice.renders,full:window.__full.renders}));
+ assert.equal(after.slice,before.slice,'unrelated note panels never render for 120 playback updates');assert.ok(after.full>=before.full+120,'control subscription receives the updates');
+ await page.evaluate(()=>window.__slice.action({title:'Narrow selection',content:'<p>Saved.</p>',course:'',courseColor:'#73999a',isPinned:false,tags:[]}));await page.waitForFunction(()=>window.__slice.count===1);assert.ok(await page.evaluate(()=>window.__slice.renders)>after.slice);
+ fs.writeFileSync('docs/selection-performance-6.8.json',JSON.stringify({updates:120,before,after,unrelatedAdditionalRenders:after.slice-before.slice,environment:'Isolated Edge/React StrictMode; render counts, not a physical FPS/GPU benchmark'},null,2));
+ await page.route('https://api.audius.co/**',route=>route.fulfill({json:{data:[{id:'qa-catalog',title:'Catalog QA',duration:60,is_streamable:true,user:{name:'QA'},permalink:'/qa/catalog'}]}}));
+ await page.goto(base+'/scripts/apheka-mcp-preview.html');await page.waitForFunction(()=>window.__mcpApp?.hydrated);
+ const call=async(name,args={})=>{const r=await page.evaluate(([name,args])=>window.__mcpRequest(name,args),[name,args]);assert.equal(r.isError,false,JSON.stringify(r));return r.structuredContent.result;};
+ const note=await call('apheka_create',{entity:'notes',data:{title:'AI diagram',content:'Keep this paragraph.'}});
+ await call('apheka_update',{entity:'notes',id:note.id,data:{diagram:{source:'Concept A -> Example B'}}});
+ const doc=await call('apheka_get',{entity:'notes',id:note.id});assert.ok(doc.content.includes('Keep this paragraph.'));assert.ok(doc.content.includes('<svg'));assert.ok(doc.content.includes('contenteditable="false"'));
+ const result=await call('apheka_search_music',{query:'QA'});assert.equal(result.items[0].catalogId,'qa-catalog');
+ const {parseLrc}=await page.evaluate(async()=>({parseLrc:typeof (await import('/src/lib/lyrics.ts')).parseLrc}));assert.equal(parseLrc,'function');
+ assert.deepEqual(errors,[]);console.log('PASS real React selector isolation: 120 updates, zero unrelated renders; relevant note update; MCP diagram append preserves text; public catalog contract');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

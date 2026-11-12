@@ -1,0 +1,27 @@
+{
+  "identifier": "com.apheka.qa",
+  "productName": "POHU QA",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://127.0.0.1:1423/scripts/apheka-timer-lifecycle-preview.html"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "POHU QA - Cursor",
+        "width": 1200,
+        "height": 800,
+        "maximized": false,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": false
+  }
+}

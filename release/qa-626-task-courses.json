@@ -1,0 +1,18 @@
+{
+  "values": [
+    "Arte1",
+    "Física1",
+    "Historia NS1",
+    "Inglés1",
+    "Literatura1",
+    "Matemática1",
+    "Sin actividad0"
+  ],
+  "total": 6,
+  "initialVisible": 5,
+  "expanded": 7,
+  "zeroCourseVisible": true,
+  "completedCoursesIncluded": true,
+  "searchDoesNotFilterSummary": true,
+  "errors": []
+}

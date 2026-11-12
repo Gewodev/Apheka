@@ -1,0 +1,90 @@
+{
+  "requests": 8,
+  "results": [
+    {
+      "query": "Morat",
+      "milliseconds": 1,
+      "artists": [
+        {
+          "id": "UCyZgGJiy9vum1xD7hXWG_rA",
+          "name": "Morat",
+          "listeners": 12300000,
+          "hasCover": true
+        }
+      ]
+    },
+    {
+      "query": "Sous Sol",
+      "milliseconds": 381,
+      "artists": [
+        {
+          "id": "UCzbBqAuQzNr5rhCGunNjO1w",
+          "name": "Sous Sol",
+          "listeners": 28200,
+          "hasCover": true
+        },
+        {
+          "id": "UCEKnihb3AeJM6vScUHTAm6A",
+          "name": "Sous Sol",
+          "listeners": 5060,
+          "hasCover": true
+        },
+        {
+          "id": "UCvBE7uVhxuKRLL1vy71NRRA",
+          "name": "Sous-Sol",
+          "listeners": 66900,
+          "hasCover": true
+        },
+        {
+          "id": "UCVy-I29b_0XLHorZRj_8z5g",
+          "name": "SOUS-SOL",
+          "listeners": 1470,
+          "hasCover": true
+        }
+      ]
+    },
+    {
+      "query": "",
+      "milliseconds": 1273,
+      "artists": [
+        {
+          "id": "UCyZgGJiy9vum1xD7hXWG_rA",
+          "name": "Morat",
+          "listeners": 12300000,
+          "hasCover": true
+        },
+        {
+          "id": "UCpEvgscqfZcCw2warfnfuew",
+          "name": "Ed Maverick",
+          "listeners": 5010000,
+          "hasCover": true
+        },
+        {
+          "id": "UCuFOVYliVjWXRW4PdvGagJA",
+          "name": "Las Estrellas de la Cumbia",
+          "listeners": 3710000,
+          "hasCover": true
+        }
+      ]
+    },
+    {
+      "query": "cold",
+      "milliseconds": 0,
+      "artists": [
+        {
+          "id": "UCpEvgscqfZcCw2warfnfuew",
+          "name": "Ed Maverick",
+          "listeners": 5010000,
+          "hasCover": true
+        },
+        {
+          "id": "UCuFOVYliVjWXRW4PdvGagJA",
+          "name": "Las Estrellas de la Cumbia",
+          "listeners": 3710000,
+          "hasCover": true
+        }
+      ]
+    }
+  ],
+  "scope": "Public anonymous catalog; actual application discovery code through controlled HTTPS relay matching desktop transport"
+}

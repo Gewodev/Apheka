@@ -1,0 +1,5 @@
+from pathlib import Path
+import json
+meta=json.loads(Path('docs/POHU-release-6.26.6.json').read_text(encoding='utf-8-sig'))
+p=Path('AGENTS.md');s=p.read_text(encoding='utf-8');marker='- TypeScript y frontend correctos (28,85 s), Rust release 6 min 06 s.';at=s.index(marker);end=s.index('\n',at);s=s[:end]+f"\n- Instalador NSIS final POHU 6.26.6 verificado: {meta['bytes']} bytes, SHA-256 {meta['sha256']}. Recursos/fuentes estables y frontend actual incrustado. Entrega release/{meta['file']}; metadatos docs/POHU-release-6.26.6.json."+s[end:];p.write_text(s,encoding='utf-8')
+p=Path('docs/POHU-6.26.6.md');s=p.read_text(encoding='utf-8');s+=f"\n\n## Instalador verificado\n\n`release/{meta['file']}` · {meta['bytes']} bytes.\n\nSHA-256: `{meta['sha256']}`. Nombre de producto y versión Windows: POHU 6.26.6. Fuentes y recursos estables durante la compilación; el ejecutable contiene los recursos actuales del frontend. No se hizo push ni se sustituyó la instalación personal.\n";p.write_text(s,encoding='utf-8')

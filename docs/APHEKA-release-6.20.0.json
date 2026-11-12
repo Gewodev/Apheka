@@ -1,0 +1,41 @@
+{
+  "version": "6.20.0",
+  "installer": "verified",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.20.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80271974,
+    "sha256": "4E02E5BD5EC01F79DCC04A7D2BCF83BB979C367E7A26E0A349B33857A8F5C788",
+    "modifiedAtUtc": "2026-10-30T13:18:29.2662497Z",
+    "sourceLatestEditUtc": "2026-10-30T13:05:56.6475301Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-Dx9rp-Zt.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/index-2a13F71u.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "embeddedViews": 9,
+  "toolCopies": 3,
+  "frontendBuild": "passed",
+  "taskIntelligence": "passed pure deadline, priority, workload, progress, weighted-choice and exclusion cases; 1000 synthetic tasks in 8.2 ms in the recorded run",
+  "tasksProduction": "passed matrix, board, statuses, list borders, 900/1440 layout, picker, inspector minimum and linked Pomodoro",
+  "notesProduction": "passed natural-height cards without overlap, flushed editor, one task link, linked chrono and return to source note",
+  "music": "passed stable daily rotation, automatic restart variation, persistent manual queue, five-row limit, independent shuffle/repeat, bounded identity-matched playback recovery and smooth lyric follow",
+  "musicPersistenceProduction": "passed reload and full Edge process restart retaining selected track, progress and edited queue; automatic tail varies without replacing current track",
+  "discovery": "passed controlled exact-recording restrictions/expiry and verified lyric-fragment matches",
+  "mcp": "passed source bridge CRUD, approvals, content, concurrent updates, persistence and paginated read-only task advice",
+  "jev": "native bounded decision test passed; user account connection pending API key",
+  "personalData": "untouched",
+  "limitations": "Isolated synthetic Edge profiles with controlled provider responses. No guarantee of every recording, live Jev account access, zero lag on every device or survival of sudden power loss."
+}

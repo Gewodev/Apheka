@@ -1,0 +1,25 @@
+{
+  "requests": 4,
+  "count": 98,
+  "tracks": 98,
+  "artists": [
+    "Grupo Frontera"
+  ],
+  "collaboration": {
+    "title": "La Del Proceso",
+    "artist": "Grupo Frontera, Manuel Turizo",
+    "duration": 185,
+    "source": "youtube",
+    "catalogId": "ytm:fWHwVvXImFg",
+    "artistCatalogIds": [
+      "UCJa2FF4TUB13Mm0GurZAqog",
+      "UCfh2j2Dq-aSeLhzuPOsnhVg"
+    ],
+    "url": "https://www.youtube.com/watch?v=fWHwVvXImFg",
+    "coverUrl": "https://yt3.googleusercontent.com/U6DkVEvoLomG-kBBh0m68jJiIwtBw7-Ab6e-ydG4vNcadgSOOykqgFTIfzbUQ5gJHubmB68SiVfqvmjV=w600-h600-l90-rj",
+    "isFavorite": false,
+    "listenedTime": 0,
+    "librarySaved": true,
+    "id": "494bda41-1075-4320-b3cf-3bf3054548cc"
+  }
+}

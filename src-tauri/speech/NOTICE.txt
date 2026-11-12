@@ -1,0 +1,7 @@
+Vosk API 0.3.45, Windows x64. Apache 2.0.
+Source: https://github.com/alphacep/vosk-api
+Wheel: https://files.pythonhosted.org/packages/c0/4c/deb0861f7da9696f8a255f1731bb73e9412cca29c4b3888a3fcb2a930a59/vosk-0.3.45-py3-none-win_amd64.whl
+Wheel SHA-256: 6994ddc68556c7e5730c3b6f6bad13320e3519b13ce3ed2aa25a86724e7c10ac
+Spanish small model 0.42, Apache 2.0.
+Source: https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+Model SHA-256: 09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f

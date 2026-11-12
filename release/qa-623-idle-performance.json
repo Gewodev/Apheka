@@ -1,0 +1,99 @@
+{
+  "environment": "isolated headless Edge; production frontend; 150 tasks / 250 sessions; external network disabled; renderer CPU time, not laptop power/temperature",
+  "report": [
+    {
+      "view": "inicio",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 10,
+      "scriptMs": 3,
+      "layoutMs": 1,
+      "heapMiB": 9,
+      "domNodes": 700
+    },
+    {
+      "view": "estudio",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 40,
+      "scriptMs": 10,
+      "layoutMs": 1,
+      "heapMiB": 13,
+      "domNodes": 1151
+    },
+    {
+      "view": "tareas",
+      "scrollFrames": 45,
+      "scrollFrameP95Ms": 40.1,
+      "scrollFrameMaxMs": 108.1,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 27,
+      "scriptMs": 2,
+      "layoutMs": 1,
+      "heapMiB": 13,
+      "domNodes": 4154
+    },
+    {
+      "view": "notas",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 8,
+      "scriptMs": 3,
+      "layoutMs": 1,
+      "heapMiB": 9,
+      "domNodes": 485
+    },
+    {
+      "view": "musica",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 11,
+      "scriptMs": 3,
+      "layoutMs": 2,
+      "heapMiB": 8,
+      "domNodes": 561
+    },
+    {
+      "view": "planificacion",
+      "scrollFrames": 45,
+      "scrollFrameP95Ms": 30.5,
+      "scrollFrameMaxMs": 57.5,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 13,
+      "scriptMs": 2,
+      "layoutMs": 1,
+      "heapMiB": 10,
+      "domNodes": 1512
+    },
+    {
+      "view": "cursos",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 12,
+      "scriptMs": 6,
+      "layoutMs": 1,
+      "heapMiB": 9,
+      "domNodes": 415
+    },
+    {
+      "view": "ia",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 3,
+      "scriptMs": 1,
+      "layoutMs": 0,
+      "heapMiB": 9,
+      "domNodes": 859
+    },
+    {
+      "view": "ajustes",
+      "scrollFrames": 0,
+      "idleSampleMs": 2200,
+      "rendererTaskMs": 11,
+      "scriptMs": 3,
+      "layoutMs": 2,
+      "heapMiB": 8,
+      "domNodes": 495
+    }
+  ]
+}

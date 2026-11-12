@@ -1,0 +1,4 @@
+from pathlib import Path
+p=Path('src/lib/habitRhythm.ts');s=p.read_text('utf-8').replace('const valid=history.filter(d=>/', 'const valid=history.filter(d=>d&&typeof d===\'object\'&&/');p.write_text(s,'utf-8')
+p=Path('src/components/ui/HabitReminderHost.tsx');s=p.read_text('utf-8').replace('history=value.slice(-40)','history=value.filter(d=>d&&typeof d===\'object\'&&typeof d.date===\'string\'&&Number.isFinite(d.minute)&&Number.isInteger(d.weekday)).slice(-40)').replace('history.filter(d=>d.date!==now.date)','history.filter(d=>d.date<now.date)');p.write_text(s,'utf-8')
+p=Path('src/components/music/MusicLinkImport.tsx');s=p.read_text('utf-8').replace(":await validateUrl(link.href);if('entries'in data)",":await validateUrl(link.href);if(controller.signal.aborted)return;if('entries'in data)");p.write_text(s,'utf-8')

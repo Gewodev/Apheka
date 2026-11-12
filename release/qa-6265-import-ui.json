@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "70 entries previewed through 60-row pages; no silent 200 limit",
+    "Name and selection preserved",
+    "Explicit create produces a 70-track own playlist",
+    "Imported playlist tracks remain outside Mis canciones",
+    "Playlist restored after reload"
+  ],
+  "errors": [],
+  "scope": "Actual MusicLinkImport/AppProvider with controlled metadata; real public Deezer checked separately"
+}

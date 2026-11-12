@@ -1,0 +1,12 @@
+[
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffmpeg.exe",
+    "Bytes": 102856192,
+    "Kept": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffmpeg-x86_64-pc-windows-msvc.exe"
+  },
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffprobe.exe",
+    "Bytes": 102652416,
+    "Kept": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffprobe-x86_64-pc-windows-msvc.exe"
+  }
+]

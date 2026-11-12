@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {createFullscreenController} from '../src/lib/fullscreen.ts';
+let active=false,writes:boolean[]=[],focus=0,cancel=0;
+const c=createFullscreenController({read:async()=>active,write:async v=>{writes.push(v);active=v;},focusContent:async()=>{focus++;}},()=>{cancel++;},async()=>{});
+const first=c.toggle();assert.equal(c.toggle(),first);assert.equal(c.getSnapshot().busy,true);await first;
+assert.deepEqual(writes,[true]);assert.equal(c.getSnapshot().active,true);assert.equal(focus,1);assert.equal(cancel,1);
+await c.exit();assert.equal(c.getSnapshot().active,false);assert.deepEqual(writes,[true,false]);
+const entry=c.toggle(),exit=c.exit();await Promise.all([entry,exit]);assert.equal(c.getSnapshot().active,false);assert.equal(c.getSnapshot().busy,false);
+let denied=true;
+const d=createFullscreenController({read:async()=>false,write:async()=>{if(denied)throw Error('denied');},focusContent:async()=>{}},()=>{},async()=>{});
+await d.toggle();assert.equal(d.getSnapshot().busy,false);assert.ok(d.getSnapshot().error);assert.equal(d.getSnapshot().active,false);
+denied=false;await d.toggle();assert.ok(d.getSnapshot().error,'unconfirmed writes must not pretend fullscreen');
+const hung=createFullscreenController({read:()=>new Promise(()=>{}),write:async()=>{},focusContent:async()=>{}},()=>{},async()=>{},10);
+await hung.toggle();assert.equal(hung.getSnapshot().busy,false);assert.ok(hung.getSnapshot().error,'hung IPC releases the controls');
+let resolveRead:(v:boolean)=>void=()=>{};
+const stale=createFullscreenController({read:()=>new Promise(resolve=>{resolveRead=resolve;}),write:async()=>{},focusContent:async()=>{}},()=>{},async()=>{},30);
+const query=stale.refresh();const operation=stale.toggle();resolveRead(true);await query;assert.equal(stale.getSnapshot().active,false,'late background read cannot overwrite an active transition');await operation;
+console.log('PASS fullscreen serialization, repeated clicks, queued Escape, denied/unconfirmed transition, focus recovery, timeout and stale query guards');

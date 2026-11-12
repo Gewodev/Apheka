@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('src/components/music/MusicPlaylists.tsx');s=p.read_text('utf-8');needle="<button aria-label={'Quitar ' + track.title + ' de la lista'}";assert needle in s;s=s.replace(needle,"<button aria-label={(track.isFavorite?'Quitar de favoritas ':'Marcar favorita ')+track.title} aria-pressed={track.isFavorite} onClick={()=>a.toggleTrackFavorite(track.id)}><Heart size={16} fill={track.isFavorite?'currentColor':'none'}/></button>"+needle);p.write_text(s,'utf-8')

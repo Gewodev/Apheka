@@ -1,0 +1,24 @@
+{
+  "product": "APHEKA",
+  "version": "6.7.0",
+  "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json",
+  "buildExitCode": 0,
+  "unitAssertions": 106,
+  "uiValidation": "Isolated Edge and production frontend; native dialogs and personal libraries require installed-app verification",
+  "artifacts": [
+    {
+      "name": "APHEKA_6.7.0_x64-setup.exe",
+      "path": "D:\\VIBE\\Owa_Studio\\src-tauri\\target\\release\\bundle\\nsis\\APHEKA_6.7.0_x64-setup.exe",
+      "bytes": 78100437,
+      "modifiedAtUtc": "2026-10-13T02:02:53.8602015Z",
+      "sha256": "D2C87A3262EAE6E5021A98B9CB1FC7A5D337A0E0A7C04475329205B8223C1551"
+    },
+    {
+      "name": "APHEKA_6.7.0_x64_en-US.msi",
+      "path": "D:\\VIBE\\Owa_Studio\\src-tauri\\target\\release\\bundle\\msi\\APHEKA_6.7.0_x64_en-US.msi",
+      "bytes": 99291136,
+      "modifiedAtUtc": "2026-10-13T02:00:16.3620000Z",
+      "sha256": "086F3D95FB24BAD2D54ADA5402EEEFC2AE6FF073EB12475B2BB9D1057AFEF16B"
+    }
+  ]
+}

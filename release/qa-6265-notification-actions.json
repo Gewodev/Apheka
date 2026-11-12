@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "Completion action records pending study exactly once",
+    "Break starts using existing evaluation flow",
+    "Repeated token has no effect",
+    "Next work session starts only in ready phase",
+    "Stale token cannot mutate timer"
+  ],
+  "errors": [],
+  "scope": "Actual Estudio and notification token actions in Edge; native activation routing covered by Rust tests. No Windows toast click simulated here."
+}

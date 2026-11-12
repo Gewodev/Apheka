@@ -1,0 +1,95 @@
+ia 
+ANALIZA POR FAVOR LO SIGUIENTE Te pediría que investigues, por favor, cómo utilizas tú el navegador o el chat, así como también cómo haces para que dentro del chat nativo en el cual tú estás desarrollando las conversaciones aparezcan, por ejemplo, investigando en la web, aparezca el desplegable, lo que investigas en la web, que aparezca el thinking, el pensando y así todos los componentes que utilizas. OSEA CUANDO ALGUIENT E ESCIRIBE A TI APARECE EL PENSNAOD, YD E AHI SUBCONJUTNOS DE PENSMAIENTO Y DE AHI CUANDO CREAR UN DOCZ APARECE ALGO, CUNAOD BSUQCAS EN AL WEB EN EL CHAT APARECE ALGO, Y ASI, OSEA OCMO LO HACES Y SI QUISIERA REPLCIAR EL DISEÑO, COMO BASARME EN QUE APARESCA ESE ESITLO, NO EN BLOQUES FEOS SINO AIS COMO TU LO HACES ANALZIALO  como loaces tencicamente como es esa naimcion y como es todo ello como haces para que haya esas animaciones dentro del chat o toddo ello
+
+Describing the streaming event types and content blocks
+Voy a revisar la documentación oficial de Anthropic sobre streaming, thinking y herramientas, porque eso es lo que necesitas para replicar el diseño.
+
+Se buscó en la web
+Primero, una aclaración importante: yo no genero esas animaciones. Yo solo emito una secuencia de bloques con tipo (pensamiento, texto, búsqueda, etc.) y el frontend de la app decide cómo pintarlos. El código exacto del frontend de claude.ai no es público, así que no puedo darte su CSS. Lo que sí es público es el contrato de streaming de la API, y con eso puedes construir algo muy parecido.
+
+1. Cómo funciona por debajo
+Con stream: true, la API manda eventos SSE. Cada respuesta es una lista de bloques con índice, y cada bloque tiene su propio ciclo de vida:
+
+Evento	Qué significa para la UI
+content_block_start	Aparece un nodo nuevo (pensando, buscando, texto…)
+content_block_delta	Ese nodo se va llenando en vivo
+content_block_stop	El nodo termina (se colapsa, se pone en verde, etc.)
+message_delta	Estado final y uso (por ejemplo, cuántas búsquedas)
+Los tipos de delta son los que dan la sensación de “animación”:
+
+Pensamiento: llega como thinking_delta con el texto del razonamiento. Se activa con el parámetro thinking en la petición. 
+anthropic
+Texto: llega como text_delta, pedazo a pedazo. Ese es el efecto de “escribiendo”. 
+anthropic
+Búsqueda web: el modelo decide buscar y emite un bloque server_tool_use; la consulta se transmite como input_json_delta; luego hay una pausa mientras se ejecuta la búsqueda. Después llega un bloque web_search_tool_result con título y URL de cada resultado. 
+google
+google
+Esa pausa entre la consulta y los resultados es exactamente cuando verás un spinner o “Buscando…”. Y cada resultado trae título y URL, que es lo que se muestra como desplegable de fuentes.
+
+2. Cómo se mapea cada bloque a la interfaz
+“Pensando”: un bloque thinking se muestra como panel colapsable. Mientras está abierto (sin content_block_stop) tiene un shimmer o puntos animados, y al cerrarse se colapsa a “Pensó durante X s”.
+Subconjuntos de pensamiento y nodos separados: varios bloques consecutivos que no son texto (pensar → buscar → pensar → buscar) se agrupan en una línea de tiempo vertical, con un nodo por bloque unido por una línea. El texto final queda fuera de ese grupo.
+Búsqueda en la web: el nodo muestra la consulta (de input_json_delta), un spinner hasta que llega web_search_tool_result, y luego una lista de chips con favicon, título y dominio.
+Crear un documento o un widget: esto no es un tipo de bloque especial. Es una herramienta personalizada (tool_use) con su propio esquema, por ejemplo create_doc con title y sections. Como sus argumentos llegan por input_json_delta, tu UI puede parsear el JSON parcial y mostrar el documento llenándose en vivo dentro de una tarjeta. Así se logra ese efecto.
+Listas, consultas a proveedor, tarjetas: son lo mismo. Defines una herramienta por cada componente visual (show_chart, show_table, query_provider…), y tu frontend tiene un componente React por herramienta.
+3. Código mínimo para replicarlo
+El reductor que arma los bloques desde el stream:
+
+ts
+type Block =
+  | { kind: 'thinking'; text: string; done: boolean }
+  | { kind: 'text'; text: string }
+  | { kind: 'search'; query: string; results?: {title:string;url:string}[]; done: boolean }
+  | { kind: 'tool'; name: string; json: string; done: boolean };
+
+function reduce(blocks: Block[], ev: any): Block[] {
+  const b = [...blocks];
+  if (ev.type === 'content_block_start') {
+    const c = ev.content_block;
+    if (c.type === 'thinking') b[ev.index] = { kind: 'thinking', text: '', done: false };
+    else if (c.type === 'text') b[ev.index] = { kind: 'text', text: '' };
+    else if (c.type === 'server_tool_use' && c.name === 'web_search')
+      b[ev.index] = { kind: 'search', query: '', done: false };
+    else if (c.type === 'web_search_tool_result') {
+      const prev = b.findLast(x => x?.kind === 'search') as any;
+      if (prev) { prev.results = c.content; prev.done = true; }
+    } else if (c.type === 'tool_use')
+      b[ev.index] = { kind: 'tool', name: c.name, json: '', done: false };
+  }
+  if (ev.type === 'content_block_delta') {
+    const d = ev.delta, cur: any = b[ev.index];
+    if (d.type === 'thinking_delta') cur.text += d.thinking;
+    if (d.type === 'text_delta') cur.text += d.text;
+    if (d.type === 'input_json_delta') {
+      if (cur.kind === 'search') cur.query += d.partial_json;
+      else cur.json += d.partial_json;
+    }
+  }
+  if (ev.type === 'content_block_stop' && (b[ev.index] as any)?.done === false)
+    (b[ev.index] as any).done = true;
+  return b;
+}
+Y la agrupación en línea de tiempo al renderizar:
+
+tsx
+const steps = blocks.filter(b => b.kind !== 'text');   // nodos de la línea de tiempo
+const answer = blocks.filter(b => b.kind === 'text');  // respuesta final
+
+<Timeline>
+  {steps.map((s, i) => <Step key={i} block={s} />)}
+</Timeline>
+<Markdown>{answer.map(a => a.text).join('')}</Markdown>
+Para un tool de documento, parsea json de forma tolerante (por ejemplo con partial-json o best-effort-json-parser) y renderiza lo que ya llegó.
+
+4. Pasos para tu web
+Backend: un endpoint que llame a la API con stream: true, thinking activado y las herramientas (web_search más las tuyas), y reenvíe el SSE al navegador.
+Cliente: leer el SSE con fetch y ReadableStream, pasar cada evento por el reductor y renderizar con React.
+Un componente por tipo de bloque: ThinkingStep, SearchStep, DocCard, ChartCard.
+Herramientas propias: descríbelas con JSON Schema. Si el modelo las llama, tu código las ejecuta y devuelve el tool_result.
+5. Para que se vea como el chat nativo y no en “bloques feos”
+Una línea vertical fina de 1px que conecta los nodos, con un punto pequeño por paso.
+Texto de pensamiento en gris, tamaño pequeño, colapsado por defecto y con transición de altura suave.
+Shimmer (gradiente que se desplaza) solo mientras el bloque está en curso, nunca después.
+Chips de fuentes pequeños con favicon, sin bordes pesados.
+Auto-colapsar el grupo de pasos cuando empieza el texto final.
+Animar solo opacity y transform, nada de saltos de layout.

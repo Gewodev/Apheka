@@ -1,0 +1,185 @@
+Una aclaración antes de entrar: no tengo acceso al código fuente del frontend de claude.ai, así que no puedo decirte “así está implementado literalmente”. Lo que sí puedo darte es el diseño técnico completo para lograr la misma experiencia, basado en cómo se comporta el chat y en el contrato de streaming de la API. Aquí va, listo para implementar.
+Cada respuesta se divide en dos zonas:
+1. Grupo de pasos (todo lo que no es texto final): pensamiento, búsquedas, consultas a proveedores, widgets, documentos.
+2. Respuesta (los bloques text).
+El grupo tiene tres estados:
+El momento clave es el primer text_delta: ahí se detiene el cronómetro, el grupo se colapsa y empieza la animación de la respuesta.
+ts
+```ts
+type Step =
+  | { id: string; kind: 'thinking'; text: string; t0: number; t1?: number }
+  | { id: string; kind: 'search'; query: string; results?: { title: string; url: string }[]; t0: number; t1?: number }
+  | { id: string; kind: 'tool'; name: string; json: string; t0: number; t1?: number };
+
+type Msg = { steps: Step[]; answer: string; groupStart?: number; groupEnd?: number };
+
+function onEvent(m: Msg, ev: any, idx: Record<number, Step>): Msg {
+  const now = performance.now();
+  if (ev.type === 'content_block_start') {
+    const c = ev.content_block;
+    if (c.type !== 'text' && m.groupStart == null) m = { ...m, groupStart: now };
+    let s: Step | undefined;
+    if (c.type === 'thinking') s = { id: crypto.randomUUID(), kind: 'thinking', text: '', t0: now };
+    if (c.type === 'server_tool_use') s = { id: c.id, kind: 'search', query: '', t0: now };
+    if (c.type === 'tool_use') s = { id: c.id, kind: 'tool', name: c.name, json: '', t0: now };
+    if (s) { idx[ev.index] = s; m = { ...m, steps: [...m.steps, s] }; }
+    if (c.type === 'web_search_tool_result') {
+      const st = m.steps.find(x => x.id === c.tool_use_id) as any;
+      if (st) { st.results = c.content; st.t1 = now; }
+    }
+  }
+  if (ev.type === 'content_block_delta') {
+    const d = ev.delta, s: any = idx[ev.index];
+    if (d.type === 'thinking_delta') s.text += d.thinking;
+    if (d.type === 'input_json_delta') s.kind === 'search' ? (s.query += d.partial_json) : (s.json += d.partial_json);
+    if (d.type === 'text_delta') {
+      if (m.groupStart != null && m.groupEnd == null) m = { ...m, groupEnd: now };
+      m = { ...m, answer: m.answer + d.text };
+    }
+  }
+  if (ev.type === 'content_block_stop' && idx[ev.index] && !idx[ev.index].t1)
+    idx[ev.index].t1 = now;
+  return { ...m };
+}
+```
+Para renderizar, usa useReducer o Zustand, y limita las actualizaciones a una por frame con requestAnimationFrame. Con streaming rápido, renderizar por cada delta satura React.
+La clave del look limpio: sin borde, sin fondo, sin padding de bloque. Es texto pequeño y gris, con una línea vertical fina.
+tsx
+```tsx
+function ThinkingGroup({ m }: { m: Msg }) {
+  const running = m.groupEnd == null;
+  const [open, setOpen] = useState(false);
+  const secs = useElapsed(m.groupStart, m.groupEnd); // actualiza cada 250 ms mientras running
+  const isOpen = running || open;
+
+  return (
+    <div className="tg">
+      <button className="tg-head" onClick={() => setOpen(o => !o)} disabled={running}>
+        <span className={running ? 'shimmer' : ''}>
+          {running ? `Pensando… ${secs} s` : `Pensó durante ${secs} s`}
+        </span>
+        {!running && <ChevronRight className={isOpen ? 'rot' : ''} size={14} />}
+      </button>
+      <div className="tg-body" data-open={isOpen}>
+        <div className="tg-inner">
+          {m.steps.map(s => <StepRow key={s.id} s={s} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+css
+```css
+.tg { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
+.tg-head { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.tg-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease; }
+.tg-body[data-open="true"] { grid-template-rows: 1fr; }
+.tg-inner { overflow: hidden; min-height: 0; position: relative; padding-left: 18px; }
+.tg-inner::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px;
+  width: 1px; background: var(--border); }
+.step { position: relative; padding: 6px 0; }
+.step::before { content: ""; position: absolute; left: -16px; top: 12px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--border-strong); }
+.step.running::before { background: var(--text-accent); animation: pulse 1.2s ease-in-out infinite; }
+
+.shimmer { background: linear-gradient(90deg, var(--text-muted) 0%, var(--text-primary) 50%, var(--text-muted) 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sh 1.6s linear infinite; }
+@keyframes sh { to { background-position: -200% 0; } }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .shimmer, .step.running::before { animation: none; } }
+```
+El truco de la animación de altura es grid-template-rows: 0fr → 1fr, que anima de forma suave sin conocer la altura real. Los saltos de layout desaparecen porque solo se anima ese valor.
+tsx
+```tsx
+function StepRow({ s }: { s: Step }) {
+  const run = s.t1 == null;
+  if (s.kind === 'thinking')
+    return <div className={`step ${run ? 'running' : ''}`}><p className="think-text">{s.text}</p></div>;
+
+  if (s.kind === 'search')
+    return (
+      <div className={`step ${run ? 'running' : ''}`}>
+        <div className="row"><Globe size={14} /> <span>{safeQuery(s.query)}</span></div>
+        {s.results && (
+          <ul className="chips">
+            {s.results.map(r => (
+              <li key={r.url}>
+                <img src={`/favicon?domain=${new URL(r.url).hostname}`} width={14} height={14} alt="" />
+                <span className="t">{r.title}</span>
+                <span className="d">{new URL(r.url).hostname}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+
+  return <ToolStep s={s} />; // proveedor, documento, widget
+}
+```
+- safeQuery extrae query del JSON parcial. Usa un parser tolerante, porque durante el stream el JSON está incompleto.
+- Los favicons mejor desde un endpoint tuyo (/favicon) que haga proxy y caché. Así no filtras a un tercero qué sitios aparecen.
+- Estilo de las filas de resultado: una línea, font-size: 12px, favicon de 14 px, título truncado con text-overflow: ellipsis y dominio en gris. Sin borde ni fondo, solo padding: 3px 0.
+Todo se resuelve igual, con herramientas propias. Defines una por componente:
+json
+```json
+{ "name": "create_doc", "input_schema": { "type": "object",
+  "properties": { "title": {"type":"string"},
+                  "sections": {"type":"array","items":{"type":"object",
+                    "properties":{"heading":{"type":"string"},"body":{"type":"string"}}}}}}}
+```
+Mientras llega input_json_delta, parseas el JSON parcial y pintas una tarjeta que se va llenando. Por ejemplo, sections[0].heading aparece, luego su body, etc. Eso produce el efecto de “el documento se está escribiendo”. Para consultas a proveedor, la herramienta es query_provider y el paso muestra “Consultando {proveedor}…”, con el icono y un check al terminar. El resultado real lo ejecuta tu backend y lo devuelves como tool_result.
+El patrón es una herramienta show_widget cuyo argumento es el código HTML/SVG, renderizado en un iframe aislado:
+tsx
+```tsx
+function Widget({ html, done }: { html: string; done: boolean }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [h, setH] = useState(120);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source === ref.current?.contentWindow && e.data?.type === 'h') setH(e.data.h);
+    };
+    addEventListener('message', onMsg);
+    return () => removeEventListener('message', onMsg);
+  }, []);
+  if (!done) return <div className="skeleton" style={{ height: h }} />;
+  const doc = `<!doctype html><meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline'; img-src data:">
+    <style>:root{${THEME_VARS}} body{margin:0;font:14px/1.5 system-ui;color:var(--text-primary);background:transparent}</style>
+    ${html}
+    <script>new ResizeObserver(()=>parent.postMessage({type:'h',h:document.documentElement.scrollHeight},'*')).observe(document.body)</script>`;
+  return <iframe ref={ref} sandbox="allow-scripts" srcDoc={doc} style={{ width: '100%', height: h, border: 0 }} />;
+}
+```
+Puntos importantes:
+- Montar solo cuando el bloque termina (done). Los scripts se ejecutan al cargar, y re-asignar srcDoc en cada delta provoca parpadeo. Mientras tanto muestra un skeleton.
+- sandbox="allow-scripts" sin allow-same-origin: el código generado por el modelo no puede tocar tu página, cookies ni storage.
+- Variables CSS inyectadas (--text-primary, --border, etc., con valores para modo claro y oscuro): así el widget hereda el tema y no se ve como un cuerpo extraño.
+- Altura automática por ResizeObserver + postMessage, para que no haya scroll interno ni espacio sobrante.
+- Para botones que escriben en el chat, expón un sendPrompt(text) dentro del iframe que haga parent.postMessage({type:'prompt', text}, '*'), y en tu app valida el origen y envía el mensaje.
+Al llegar el primer text_delta, el grupo se colapsa y empieza la respuesta. Para que no se vea a golpes:
+1. Bufferiza los deltas y vuelca el texto a la UI en cada requestAnimationFrame, no por cada evento.
+2. Renderiza markdown de forma incremental. Con react-markdown normal, el markdown a medio escribir se rompe (listas, bloques de código). Hay librerías pensadas para streaming (por ejemplo, Streamdown); revisa su estado actual antes de adoptarla.
+3. Fade-in del último bloque que crece:
+css
+```css
+   .answer > :last-child { animation: fi .25s ease-out; }
+   @keyframes fi { from { opacity: 0; transform: translateY(2px); } }
+```
+Para un efecto palabra por palabra, envuelve los tokens nuevos en <span class="w"> con animation: fi .2s y no los reanimes en cada render (clave estable por índice de palabra).
+ 4. Sin márgenes extra: en .answer p:first-child { margin-top: 0 } y p:last-child { margin-bottom: 0 }, y un único gap del contenedor entre el grupo de pasos y la respuesta (por ejemplo, gap: 12px). Los márgenes molestos suelen venir de <p> y <ul> con márgenes por defecto.
+- Un solo contenedor flex en columna con gap, sin márgenes sueltos en los hijos.
+- Texto de pasos a 13 px y gris, respuesta a 15-16 px y color primario. El contraste de tamaño y color separa visualmente “proceso” de “resultado”.
+- Nada de bordes ni fondos en los pasos, solo la línea vertical de 1 px.
+- Un único icono por paso (16 px o menos, de línea), nunca emojis.
+- Etiquetas cortas y en infinitivo o gerundio: “Pensando…”, “Buscando en la web”, “Consultando proveedor”. Sin frases explicativas.
+- Respeta prefers-reduced-motion.
+- El cronómetro se calcula con performance.now(), no contando renders, y se congela en groupEnd.
+1. Endpoint de streaming y reductor de eventos (sección 2).
+2. ThinkingGroup con cronómetro y colapso (sección 3).
+3. Paso de búsqueda con chips (sección 4).
+4. Respuesta en markdown con fade (sección 7).
+5. Herramientas propias: documento, proveedor (sección 5).
+6. Widgets en iframe (sección 6).

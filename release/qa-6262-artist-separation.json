@@ -1,0 +1,84 @@
+{
+  "membership": {
+    "library": [
+      "Guardada manualmente"
+    ],
+    "artistTracks": 24,
+    "artists": [
+      "Grupo Frontera"
+    ]
+  },
+  "queue": {
+    "pool": [
+      "ed60eda2-6bd2-4bf9-9129-276ce7a122ad",
+      "manual",
+      "6a1e21af-895b-4064-ae53-2449757ef648",
+      "c6fcb329-d4c8-415d-9706-2dfb24ccffc5",
+      "a38a05e2-8d77-417f-bd9d-12558ad19b0b",
+      "3dcd542a-b207-4324-b6ea-806fa53a0164",
+      "6561a850-6de7-46f4-a3d3-468c57d00afc",
+      "d0bdaa40-d5d7-4018-857d-895b1ef4333e",
+      "f0bedea9-7c02-49ba-9f9b-860172728ec2",
+      "7854fb36-be7f-4564-a5af-3b36022a6d39",
+      "4b431125-b28d-426b-9c70-9934a84babff",
+      "e9120bfe-4454-4126-a737-fce53066d505",
+      "8ce4356f-6d1e-4420-8478-46ea4333b284",
+      "0c652365-b6f9-4946-b80f-00b2a345f4f0",
+      "ed6e3c7a-f7f1-419a-af8b-d18bbd4b4aea",
+      "d37d6ad5-0fb2-4885-b470-98d85b555a78",
+      "bbaf076f-c62b-4fa9-a137-fa3901e401a3",
+      "94ca51e9-d8ad-40eb-9c82-ed6ae5f67dd8",
+      "3908e909-a303-43de-9dd1-a24706b12720",
+      "c6d9bc1b-7f6b-4f77-af9f-ec9cab373f72",
+      "0f0de656-e476-4596-aac4-3d1881df5b54",
+      "debca18c-5a4d-425d-8b3d-7199061ecc4a",
+      "c14396a1-acc3-48d7-8e1c-35d4319eaa27",
+      "39dc579e-83e6-4512-ac58-72b9ec972cda"
+    ],
+    "queue": [
+      "f0bedea9-7c02-49ba-9f9b-860172728ec2",
+      "d0bdaa40-d5d7-4018-857d-895b1ef4333e",
+      "c14396a1-acc3-48d7-8e1c-35d4319eaa27",
+      "bbaf076f-c62b-4fa9-a137-fa3901e401a3",
+      "7854fb36-be7f-4564-a5af-3b36022a6d39",
+      "ed6e3c7a-f7f1-419a-af8b-d18bbd4b4aea",
+      "3908e909-a303-43de-9dd1-a24706b12720",
+      "0f0de656-e476-4596-aac4-3d1881df5b54",
+      "39dc579e-83e6-4512-ac58-72b9ec972cda",
+      "d37d6ad5-0fb2-4885-b470-98d85b555a78",
+      "6a1e21af-895b-4064-ae53-2449757ef648",
+      "a38a05e2-8d77-417f-bd9d-12558ad19b0b",
+      "c6d9bc1b-7f6b-4f77-af9f-ec9cab373f72",
+      "manual",
+      "4b431125-b28d-426b-9c70-9934a84babff",
+      "c6fcb329-d4c8-415d-9706-2dfb24ccffc5",
+      "e9120bfe-4454-4126-a737-fce53066d505",
+      "6561a850-6de7-46f4-a3d3-468c57d00afc",
+      "8ce4356f-6d1e-4420-8478-46ea4333b284",
+      "3dcd542a-b207-4324-b6ea-806fa53a0164",
+      "0c652365-b6f9-4946-b80f-00b2a345f4f0",
+      "94ca51e9-d8ad-40eb-9c82-ed6ae5f67dd8",
+      "debca18c-5a4d-425d-8b3d-7199061ecc4a"
+    ],
+    "current": "ed60eda2-6bd2-4bf9-9129-276ce7a122ad",
+    "library": 2
+  },
+  "cycles": {
+    "transitions": 60,
+    "onlyArtist": true,
+    "restoredPool": 24
+  },
+  "restored": {
+    "library": [
+      "Guardada manualmente",
+      "La Del Proceso"
+    ],
+    "artists": [
+      "Grupo Frontera"
+    ],
+    "artistOnly": [
+      "UCfrontera"
+    ]
+  },
+  "errors": []
+}

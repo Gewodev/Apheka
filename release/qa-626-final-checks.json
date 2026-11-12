@@ -1,0 +1,47 @@
+{
+  "math": {
+    "results": [
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      },
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      },
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      },
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      },
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      },
+      {
+        "formulas": 1,
+        "errors": 0,
+        "leaks": false
+      }
+    ],
+    "literalCode": true,
+    "safe": true
+  },
+  "saved": {
+    "seconds": 8,
+    "taskSeconds": 8,
+    "mirrorSeconds": 8,
+    "durableSeconds": 4,
+    "notesLength": 1470000,
+    "longTasks": []
+  },
+  "errors": []
+}

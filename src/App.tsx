@@ -1,4 +1,5 @@
 import './workspace-6266.css';
+import './workspace-6267.css';
 import HabitReminderHost from './components/ui/HabitReminderHost';
 import NotificationNavigation from './components/NotificationNavigation';
 import {useCharvisEnabled, setCharvisEnabled} from './lib/charvisAvailability';
@@ -562,7 +563,7 @@ export function AppContent() {
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
         <div className="sidebar-logo" role="button" tabIndex={0} aria-label={isCollapsed ? 'Expandir menú' : 'Contraer menú'} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSidebar();}}} onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
-          <img src="/owa_logo.png" alt="APHEKA" className="sidebar-logo-img" />
+          <img src="/owa_logo.png" alt="POUH" className="sidebar-logo-img" />
           {!isCollapsed && <AphekaWordmark />}
         </div>
 

@@ -1,0 +1,163 @@
+{
+  "tools": [
+    {
+      "mode": "flashcardsDeck",
+      "saved": true,
+      "groups": [
+        "cards"
+      ]
+    },
+    {
+      "mode": "quizDeck",
+      "saved": true,
+      "groups": [
+        "questions"
+      ]
+    },
+    {
+      "mode": "matchDeck",
+      "saved": true,
+      "groups": [
+        "pairs"
+      ]
+    },
+    {
+      "mode": "clozeDeck",
+      "saved": true,
+      "groups": [
+        "items"
+      ]
+    },
+    {
+      "mode": "feynmanDeck",
+      "saved": true,
+      "groups": [
+        "concepts"
+      ]
+    },
+    {
+      "mode": "vfDeck",
+      "saved": true,
+      "groups": [
+        "items"
+      ]
+    },
+    {
+      "mode": "seqDeck",
+      "saved": true,
+      "groups": [
+        "seqs"
+      ]
+    },
+    {
+      "mode": "catDeck",
+      "saved": true,
+      "groups": [
+        "items"
+      ]
+    }
+  ],
+  "background": [
+    {
+      "class": "charvis-sidebar charvis-research-host charvis-page-host",
+      "background": "rgba(0, 0, 0, 0)",
+      "blur": "none"
+    },
+    {
+      "class": "charvis-chat-app charvis-chat-refined",
+      "background": "rgba(0, 0, 0, 0)",
+      "blur": "none"
+    },
+    {
+      "class": "charvis-chat-rail",
+      "background": "rgba(0, 0, 0, 0)",
+      "blur": "none"
+    },
+    {
+      "class": "charvis-chat-main",
+      "background": "rgba(0, 0, 0, 0)",
+      "blur": "none"
+    }
+  ],
+  "ancestors": [
+    {
+      "class": "charvis-chat-body charvis-chat-body-empty",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "charvis-chat-main",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "charvis-chat-app charvis-chat-refined",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "charvis-sidebar charvis-research-host charvis-page-host",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "",
+      "id": "charvis-workspace-outlet",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "charvis-workspace-page",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "fade-in-animation",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "desktop-stage",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "main-area",
+      "id": "",
+      "background": "rgba(0, 0, 0, 0)",
+      "image": "none"
+    },
+    {
+      "class": "app-layout studio-environment single-environment nav-pinned nav-collapsed",
+      "id": "",
+      "background": "rgb(20, 20, 20)",
+      "image": "none"
+    },
+    {
+      "class": "",
+      "id": "root",
+      "background": "rgb(20, 20, 20)",
+      "image": "none"
+    },
+    {
+      "class": "",
+      "id": "",
+      "background": "rgb(20, 20, 20)",
+      "image": "none"
+    },
+    {
+      "class": "",
+      "id": "",
+      "background": "rgb(20, 20, 20)",
+      "image": "none"
+    }
+  ],
+  "errors": []
+}

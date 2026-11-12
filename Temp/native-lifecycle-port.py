@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('scripts/test-native-timer-lifecycle-6265.cjs');s=p.read_text('utf-8').replace("const page=browser.contexts()","const qaPort=process.env.APHEKA_QA_PORT||'1422';\n const page=browser.contexts()").replace("p.url().includes('1422')","p.url().includes(':'+qaPort)").replace("'http://127.0.0.1:1422/scripts/apheka-timer-lifecycle-preview.html'","'http://127.0.0.1:'+qaPort+'/scripts/apheka-timer-lifecycle-preview.html'");p.write_text(s,'utf-8')

@@ -1,0 +1,16 @@
+{
+  "openMs": 86.30000001192093,
+  "idleWindowMs": 4500,
+  "taskMs": 100.03,
+  "layoutMs": 9.367,
+  "styleMs": 10.506,
+  "longTasks": [],
+  "styles": {
+    "animation": "session-preview-arrive",
+    "backdrop": "none",
+    "scrollHeight": 562,
+    "height": 562,
+    "infinite": 0
+  },
+  "errors": []
+}

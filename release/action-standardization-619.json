@@ -1,0 +1,282 @@
+[
+  {
+    "view": "Tareas",
+    "variant": "primary",
+    "text": "Agregar tarea"
+  },
+  {
+    "view": "Tareas",
+    "variant": "secondary",
+    "text": "Hoy"
+  },
+  {
+    "view": "Tareas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Tareas",
+    "variant": "primary",
+    "text": "Crear tarea"
+  },
+  {
+    "view": "Tareas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Tareas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Volver"
+  },
+  {
+    "view": "Notas",
+    "variant": "primary",
+    "text": "Nueva nota"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Restaurar"
+  },
+  {
+    "view": "Notas",
+    "variant": "danger",
+    "text": "Eliminar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Restaurar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "primary",
+    "text": "Sí, cambiar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "danger",
+    "text": "Descartar"
+  },
+  {
+    "view": "Notas",
+    "variant": "primary",
+    "text": "Agregar enlace"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Descargar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "primary",
+    "text": "Guardar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Notas",
+    "variant": "primary",
+    "text": "Restaurar"
+  },
+  {
+    "view": "Planificacion",
+    "variant": "secondary",
+    "text": "Hoy"
+  },
+  {
+    "view": "Planificacion",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Planificacion",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Volver"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "danger",
+    "text": "Eliminar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "danger",
+    "text": "Eliminar asignatura"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Retroceder"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Abrir en Tareas"
+  },
+  {
+    "view": "Cursos",
+    "variant": "danger",
+    "text": "Borrar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "secondary",
+    "text": "Cancelar"
+  },
+  {
+    "view": "Cursos",
+    "variant": "danger",
+    "text": "Eliminar etiqueta"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "primary",
+    "text": "Solicitar Permiso"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "primary",
+    "text": "Probar Nativa"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "secondary",
+    "text": "Probar Toast"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "secondary",
+    "text": "Abrir carpeta"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "primary",
+    "text": "+ Agregar frame"
+  },
+  {
+    "view": "Ajustes",
+    "variant": "primary",
+    "text": "Guardar y cerrar"
+  }
+]

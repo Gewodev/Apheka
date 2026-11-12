@@ -13,4 +13,4 @@ export function estimateDayEnd(history:ActivityDay[],weekday:number,fallback:num
  const sorted=sample.map(d=>d.minute).sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);
  return {minute:sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2,learned:true,samples:sample.length};
 }
-export function readHabitReminder():HabitReminderConfig{try{const v=JSON.parse(localStorage.getItem(HABIT_REMINDER_KEY)||'null');return {enabled:v?.enabled===true,lead:v?.lead===120?120:60,fallback:Number.isFinite(v?.fallback)?Math.max(240,Math.min(1679,v.fallback)):1320};}catch{return {enabled:false,lead:60,fallback:1320};}}
+export function readHabitReminder():HabitReminderConfig{try{const v=JSON.parse(localStorage.getItem(HABIT_REMINDER_KEY)||'null');return {enabled:true,lead:v?.lead===120?120:60,fallback:Number.isFinite(v?.fallback)?Math.max(240,Math.min(1679,v.fallback)):1320};}catch{return {enabled:true,lead:60,fallback:1320};}}

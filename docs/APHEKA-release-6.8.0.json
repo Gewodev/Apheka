@@ -1,0 +1,66 @@
+{
+  "version": "6.8.0",
+  "date": "2026-10-24",
+  "checks": {
+    "typescript": true,
+    "desktopContracts": true,
+    "selectorIsolation": true,
+    "notesEditingPersistence": true,
+    "notesDrag": true,
+    "desktopMusicLyricsDiagrams": true,
+    "eightViewLayout": true,
+    "courseGridTransitions": true,
+    "courseInteriorSpace": true,
+    "actualAudioFullscreen": true,
+    "offlineQueue": true,
+    "boundedPlaybackFailure": true,
+    "mcpCrud": true,
+    "studyMcp": true,
+    "connectionPanel": true,
+    "installerReuseFixture": true,
+    "installerHooksFixture": true,
+    "productionFrontendBuild": true,
+    "liveBrowserCatalogAndStream": true,
+    "productionUiFontsAndSettings": true,
+    "packagedStdio": true
+  },
+  "performance": {
+    "playbackUpdates": 120,
+    "unrelatedNoteRenders": 0,
+    "notesBackdropElementsBefore": 183,
+    "notesBackdropElementsAfter": 0,
+    "physicalGpuBenchmark": false
+  },
+  "services": {
+    "catalog": "Audius",
+    "lyrics": "LRCLIB",
+    "catalogAudioDownloads": false,
+    "offlineAudio": "Existing local library only",
+    "newPackageDependencies": 0
+  },
+  "toolResources": {
+    "count": 3,
+    "reuse": "SHA-256 before File extraction",
+    "generatedInstallerVerified": true,
+    "installedEntries": [
+      "bin\\ffmpeg.exe",
+      "bin\\ffprobe.exe",
+      "bin\\yt-dlp.exe"
+    ]
+  },
+  "artifact": {
+    "state": "complete",
+    "version": "6.8.0",
+    "bytes": 78865941,
+    "sha256": "0031C385C6956CE8CA18D9F9497BE33EFC7D340DA99B30D12B4272D564089023",
+    "nativeBundleVerified": true,
+    "lazyViewAssetsVerified": true
+  },
+  "sourceAudit": {
+    "manifestRewrittenBeforeFrontend": false,
+    "latestSourceEditUtc": "2026-10-24T20:53:57.6036621Z",
+    "installerModifiedAtUtc": "2026-10-24T21:08:29.6417793Z",
+    "signatureCheckedBeforeAndAfterBuild": true,
+    "toolHashesCheckedBeforeAndAfterBuild": true
+  }
+}

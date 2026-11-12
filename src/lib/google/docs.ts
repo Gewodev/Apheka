@@ -68,7 +68,7 @@ export async function exportNotesToDoc(
   const content = notes
     .map(n => `${n.title}\n${'='.repeat(n.title.length)}\n\n${n.content || '(sin contenido)'}\n\n---\n`)
     .join('\n');
-  const result = await createDocument('APHEKA - Notas', content);
+  const result = await createDocument('POUH - Notas', content);
   return result.documentUrl;
 }
 
@@ -76,7 +76,7 @@ export async function exportStatsToSheet(
   headers: string[],
   data: (string | number)[][],
 ): Promise<string> {
-  const result = await createSpreadsheet('APHEKA - Estadísticas', [headers, ...data]);
+  const result = await createSpreadsheet('POUH - Estadísticas', [headers, ...data]);
   return result.spreadsheetUrl;
 }
 

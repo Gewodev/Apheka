@@ -1,0 +1,3 @@
+from pathlib import Path
+p=Path('src/lib/commandShortcuts.ts');s=p.read_text(encoding='utf-8');s=s.replace("const KEY='pohu_command_shortcuts';","const KEY='pohu_command_shortcuts';\nconst COMMAND_IDS=['new-note','open-note','new-task','event','tasks','study','planner','courses','music','settings'];");s=s.replace('id.length<30&&','COMMAND_IDS.includes(id)&&').replace('const values=readCommandShortcuts();if(!COMMAND_KEYS.includes(key))',"const values=readCommandShortcuts();if(!COMMAND_IDS.includes(id))throw Error('Ese comando no está disponible.');if(!COMMAND_KEYS.includes(key))");p.write_text(s,encoding='utf-8')
+p=Path('scripts/test-ui-6267.cjs');s=p.read_text(encoding='utf-8').replace('runtime-6265.html','runtime-6267.html');p.write_text(s,encoding='utf-8')

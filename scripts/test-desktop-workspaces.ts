@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';
+import {initialDesktops,readDesktops,patchDesktop,activateDesktop,addDesktop,removeDesktop} from '../src/lib/desktopWorkspace.ts';
+const first=initialDesktops('notas');assert.equal(first.desktops[0].view,'notas');
+let state=patchDesktop(first,{companion:'timer',courseId:'course-a'});state=activateDesktop(state,'desk-2');state=patchDesktop(state,{view:'musica',name:'Escuchar'});state=activateDesktop(state,'desk-1');assert.equal(state.desktops[0].view,'notas');assert.equal(state.desktops[0].companion,'timer');assert.equal(state.desktops[1].view,'musica');
+assert.deepEqual(readDesktops(JSON.stringify(state)),state);assert.equal(activateDesktop(state,'missing'),state);assert.equal(patchDesktop(state,{name:'   '}),state);
+state=addDesktop(state,'desk-4');state=addDesktop(state,'desk-5');assert.equal(addDesktop(state,'desk-6'),state);assert.equal(state.desktops.length,5);state=removeDesktop(state,'desk-5');assert.ok(state.desktops.some(d=>d.id===state.activeId));
+const invalid=readDesktops(JSON.stringify({version:1,activeId:'missing',desktops:[{id:'x',name:'Valid',view:'curso_detalle',courseId:null,companion:'malformed'},{id:'x',view:'notas'},{id:'bad',view:'terminal'}]}));assert.equal(invalid.desktops.length,1);assert.equal(invalid.desktops[0].view,'cursos');assert.equal(invalid.desktops[0].companion,'none');assert.equal(invalid.activeId,'x');assert.equal(removeDesktop(invalid,'x'),invalid);
+assert.equal(readDesktops('{broken').desktops.length,3);console.log('PASS desktops: independent views, course/companion persistence, rename, five-workspace cap, active removal and corrupt data validation');

@@ -1,0 +1,31 @@
+{
+  "scope": "src-tauri/target/release only; source binaries and personal data untouched",
+  "canonicalToolsRetained": 3,
+  "removed": [
+    {
+      "bytes": 102856192,
+      "file": "ffmpeg.exe"
+    },
+    {
+      "bytes": 102856192,
+      "file": "bin/ffmpeg-x86_64-pc-windows-msvc.exe"
+    },
+    {
+      "bytes": 102652416,
+      "file": "ffprobe.exe"
+    },
+    {
+      "bytes": 102652416,
+      "file": "bin/ffprobe-x86_64-pc-windows-msvc.exe"
+    },
+    {
+      "bytes": 17840399,
+      "file": "yt-dlp.exe"
+    },
+    {
+      "bytes": 17840399,
+      "file": "bin/yt-dlp-x86_64-pc-windows-msvc.exe"
+    }
+  ],
+  "bytesFreed": 446698014.0
+}

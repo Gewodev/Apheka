@@ -154,7 +154,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 onClick={() => {
                   try {
-                    const txt = `APHEKA error\n${this.state.error?.message || ''}\n${this.state.stack || this.state.error?.stack || ''}`;
+                    const txt = `POUH error\n${this.state.error?.message || ''}\n${this.state.stack || this.state.error?.stack || ''}`;
                     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
                   } catch { /* noop */ }
                 }}

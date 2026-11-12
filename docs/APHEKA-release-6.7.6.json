@@ -1,0 +1,115 @@
+{
+  "product": "APHEKA",
+  "version": "6.7.6",
+  "dateLocal": "2026-10-24",
+  "timezone": "America/Lima",
+  "checks": {
+    "typescript": true,
+    "rustTests": 17,
+    "connection": {
+      "primaryFlow": "choose client, prepare connection and copy setup prompt",
+      "clientProfiles": 8,
+      "customSavedProfilesLimit": 12,
+      "actualExecutablePath": true,
+      "promptAcceptsOnlyValidatedExecutableAndFixedMcpArgument": true,
+      "httpCredentialsExcludedFromPrompt": true,
+      "secretExcludedFromPreferences": true,
+      "configurationJsonAndTomlParsed": true,
+      "verifiedStatusRequiresDescribeAndOverview": true,
+      "technicalOptionsCollapsed": true,
+      "widths": [
+        800,
+        900,
+        1200,
+        1440
+      ],
+      "automaticExternalAccountAuthorization": false,
+      "chatgptRequiresAuthorizedTunnelAndConnector": true
+    },
+    "mcp": {
+      "tools": 21,
+      "domainCrudPersistenceAndEditorSynchronization": true,
+      "deckModes": 8,
+      "allStudyTechniquesAndNestedFolders": true,
+      "sourcesPagedPdfTextTagsMoveReorder": true,
+      "expandedAppearanceAudioFloatingSettings": true,
+      "musicNextPreviousStopSeekPauseResume": true,
+      "localDeletionApproval": true,
+      "arbitraryOperatingSystemControl": false
+    },
+    "playback": {
+      "realWavFromIndexedDb": true,
+      "fullscreenCycles": 3,
+      "sourceAndTimeContinuous": true,
+      "canvasVisualizerCount": 0,
+      "audioContextsCreated": 0,
+      "sharedClockResolutionSeconds": 1,
+      "seekAndPausePositionImmediate": true,
+      "mcpPauseChangesRealAudioNotOnlyIndicator": true
+    },
+    "pointer": {
+      "nativeWindowsWebView2Qa": true,
+      "qaBinaryVersion": "6.7.6",
+      "defaultRendering": "compatible",
+      "defaultCursor": "native",
+      "softwareCursorDefault": false,
+      "fullscreenInputWithAndWithoutAudio": true,
+      "perPointerMovementNativeRecoveryRemoved": true,
+      "physicalHardwareCursorDefectReproduced": false
+    },
+    "studyTime": {
+      "savedSessionsTaskCountersReconciled": true,
+      "restsDistractionsInvalidDurationsExcluded": true,
+      "legacyFallbackPreserved": true
+    },
+    "optionalAssistantResponseImport": {
+      "realNotesTasksFlashcards": true,
+      "previewNoWrites": true,
+      "deduplicationEscapingAndLimits": true,
+      "representedAsMcpConnection": false
+    },
+    "installerFixtures": {
+      "firstInstallUpgradeMaintenance": true,
+      "exactLegacyProductOnly": true,
+      "dataAndAudioIntact": true,
+      "canonicalToolsPreserved": true,
+      "knownLegacyDuplicatesRemoved": true,
+      "unrelatedFilesAndProductsIntact": true
+    },
+    "productionFrontendBuild": true
+  },
+  "toolResources": {
+    "previousEntries": 8,
+    "configuredEntries": 3,
+    "previousUncompressedBytes": 652206622,
+    "currentUncompressedBytes": 223349007,
+    "duplicateUncompressedBytesAvoided": 428857615,
+    "startupDownloadCopyOrToolExecution": false,
+    "generatedInstallerVerified": true,
+    "installedEntries": [
+      "bin\\ffmpeg.exe",
+      "bin\\ffprobe.exe",
+      "bin\\yt-dlp.exe"
+    ],
+    "workspaceDuplicateFilesDeleted": 6,
+    "workspaceDuplicateBytesDeleted": 446698014.0
+  },
+  "personalInstallationModified": false,
+  "personalCpuGpuPercentageMeasured": false,
+  "installerVerification": "release/apheka_FINAL.json",
+  "artifact": {
+    "state": "complete",
+    "version": "6.7.6",
+    "bytes": 78829939,
+    "sha256": "2A1C55149EB813B7B3AAF8F020B4949FC6DFD3838A73581F70726B618D8449ED",
+    "nativeBundleVerified": true,
+    "lazyViewAssetsVerified": true,
+    "stdioExecutableTest": true
+  },
+  "sourceAudit": {
+    "manifestRewrittenBeforeFrontend": false,
+    "latestSourceEditUtc": "2026-10-24T15:39:08.9319477Z",
+    "installerModifiedAtUtc": "2026-10-24T15:49:29.9086011Z",
+    "signatureCheckedBeforeAndAfterBuild": true
+  }
+}

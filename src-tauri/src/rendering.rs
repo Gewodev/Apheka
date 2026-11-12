@@ -3,7 +3,7 @@ use tauri::Manager;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all="lowercase")]
-pub enum Mode { Standard, #[default] Compatible, Software }
+pub enum Mode { #[default] Standard, Compatible, Software }
 #[derive(Deserialize,Serialize)]
 struct Preference { mode: Mode }
 pub struct RenderingState(pub Mode);
@@ -12,8 +12,8 @@ fn arguments(mode:Mode)->Option<&'static str> {
     match mode {Mode::Standard=>None,Mode::Compatible=>Some("--disable-direct-composition"),Mode::Software=>Some("--disable-gpu")}
 }
 pub fn configure(identifier:&str)->RenderingState {
-    // Avoid the fullscreen DirectComposition presentation path that can leave the
-    // Windows hardware cursor stale. GPU rendering remains enabled; no global OS change.
+    // Keep the normal accelerated presentation path by default. Compatibility
+    // workarounds remain explicit diagnostics, rather than a global rendering policy.
     let mode=dirs::config_dir().and_then(|p|std::fs::read(p.join(identifier).join("graphics.json")).ok())
         .and_then(|v|serde_json::from_slice::<Preference>(&v).ok()).map(|v|v.mode).unwrap_or_default();
     #[cfg(windows)]
@@ -47,7 +47,7 @@ pub fn graphics_set_mode(window:tauri::WebviewWindow,mode:Mode,state:tauri::Stat
 #[cfg(test)]mod tests {
     use super::*;
     #[test]fn limited_graphics_profiles(){
-        assert_eq!(Mode::default(),Mode::Compatible);
+        assert_eq!(Mode::default(),Mode::Standard);
         assert_eq!(arguments(Mode::Standard),None);
         assert_eq!(arguments(Mode::Compatible),Some("--disable-direct-composition"));
         assert_eq!(arguments(Mode::Software),Some("--disable-gpu"));

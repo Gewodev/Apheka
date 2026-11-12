@@ -1,0 +1,61 @@
+{
+  "environment": "Edge headless, isolated synthetic data, 1200x850; not a physical GPU measurement",
+  "results": [
+    {
+      "view": "Inicio",
+      "frames": 217,
+      "p95FrameMs": 7.199999999999818,
+      "blurredElements": 1,
+      "layoutMs": 0.671999999999992,
+      "styleMs": 0,
+      "taskMs": 58.058
+    },
+    {
+      "view": "Tareas",
+      "frames": 192,
+      "p95FrameMs": 7.199999999999818,
+      "blurredElements": 0,
+      "layoutMs": 14.543000000000001,
+      "styleMs": 36.144,
+      "taskMs": 260.71900000000005
+    },
+    {
+      "view": "Notas",
+      "frames": 188,
+      "p95FrameMs": 7.099999999999454,
+      "scrollHeight": 17658,
+      "blurredElements": 0,
+      "layoutMs": 0.5469999999999919,
+      "styleMs": 13.223000000000013,
+      "taskMs": 649.911
+    },
+    {
+      "view": "Cursos",
+      "frames": 217,
+      "p95FrameMs": 7.100000000000364,
+      "scrollHeight": 3498,
+      "blurredElements": 0,
+      "layoutMs": 0.49199999999999244,
+      "styleMs": 1.452999999999982,
+      "taskMs": 232.45699999999968
+    },
+    {
+      "view": "Ajustes",
+      "frames": 218,
+      "p95FrameMs": 7.199999999998909,
+      "blurredElements": 0,
+      "layoutMs": 0.2580000000000082,
+      "styleMs": 0,
+      "taskMs": 50.60200000000003
+    },
+    {
+      "view": "Música",
+      "frames": 219,
+      "p95FrameMs": 7.199999999998909,
+      "blurredElements": 0,
+      "layoutMs": 4.208999999999991,
+      "styleMs": 2.057000000000003,
+      "taskMs": 63.91100000000005
+    }
+  ]
+}

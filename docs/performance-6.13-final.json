@@ -1,0 +1,62 @@
+{
+  "environment": "Edge headless, production preview 1421, isolated synthetic data (120 tasks / 180 notes / 24 courses), 1200x850, 1.5s per view. Installer compression was active. This is not a physical GPU benchmark or a guarantee for every laptop.",
+  "results": [
+    {
+      "view": "Inicio",
+      "frames": 218,
+      "p95FrameMs": 7.099999999999909,
+      "scrollHeight": 953,
+      "blurredElements": 0,
+      "layoutMs": 1.0350000000000013,
+      "styleMs": 22.406999999999996,
+      "taskMs": 351.83100000000013
+    },
+    {
+      "view": "Tareas",
+      "frames": 200,
+      "p95FrameMs": 7.099999999999454,
+      "blurredElements": 0,
+      "layoutMs": 14.419999999999995,
+      "styleMs": 51.307000000000016,
+      "taskMs": 216.94799999999992
+    },
+    {
+      "view": "Notas",
+      "frames": 186,
+      "p95FrameMs": 14,
+      "scrollHeight": 10698,
+      "blurredElements": 0,
+      "layoutMs": 89.58900000000001,
+      "styleMs": 89.90199999999999,
+      "taskMs": 1000.5500000000001
+    },
+    {
+      "view": "Cursos",
+      "frames": 218,
+      "p95FrameMs": 7,
+      "scrollHeight": 1994,
+      "blurredElements": 0,
+      "layoutMs": 0.39400000000000546,
+      "styleMs": 35.528000000000006,
+      "taskMs": 392.31300000000016
+    },
+    {
+      "view": "Ajustes",
+      "frames": 218,
+      "p95FrameMs": 7.099999999998545,
+      "blurredElements": 0,
+      "layoutMs": 0.4230000000000067,
+      "styleMs": 0,
+      "taskMs": 53.56400000000016
+    },
+    {
+      "view": "Música",
+      "frames": 218,
+      "p95FrameMs": 7.099999999998545,
+      "blurredElements": 0,
+      "layoutMs": 1.0949999999999849,
+      "styleMs": 0.5229999999999957,
+      "taskMs": 57.53300000000028
+    }
+  ]
+}

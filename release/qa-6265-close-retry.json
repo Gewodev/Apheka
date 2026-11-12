@@ -1,0 +1,10 @@
+{
+  "checks": [
+    "Close failure is visible and retryable",
+    "Retry clears the error",
+    "X never starts native dragging",
+    "Keyboard Enter activates the same close command"
+  ],
+  "errors": [],
+  "scope": "Real FloatingTimer component in Edge, controlled IPC failure"
+}

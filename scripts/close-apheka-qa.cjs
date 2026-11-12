@@ -1,0 +1,2 @@
+const assert=require('node:assert/strict'),{connect}=require('./qa-cdp.cjs');
+(async()=>{const c=await connect();try{const id=await c.evaluate("import('/node_modules/@tauri-apps/api/app.js').then(app=>app.getIdentifier())");assert.equal(id,'com.apheka.qa','only our isolated app may be closed');await c.send('Runtime.evaluate',{expression:"window.__TAURI_INTERNALS__.invoke('plugin:window|destroy')",awaitPromise:false});console.log('Closed isolated QA window; personal APHEKA installation untouched.');}finally{c.ws.close();}})().catch(e=>{console.error(e);process.exitCode=1});

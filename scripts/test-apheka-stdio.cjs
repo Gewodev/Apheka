@@ -1,0 +1,5 @@
+const assert=require('node:assert/strict');const {spawnSync}=require('node:child_process');const path=require('node:path');
+const executable=path.resolve(__dirname,'../src-tauri/target/release/owa-studio.exe');
+const lines=[JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'APHEKA QA',version:'1'}}}),JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'}),'invalid-json'];
+const result=spawnSync(executable,['--mcp'],{input:lines.join('\n')+'\n',encoding:'utf8',timeout:15000,windowsHide:true});
+assert.ifError(result.error);assert.equal(result.status,0,result.stderr);const responses=result.stdout.trim().split(/\r?\n/).map(line=>JSON.parse(line));assert.equal(responses.length,2,'stdio emits only replies and no startup banner');assert.equal(responses[0].id,1);assert.equal(responses[0].error.code,-32000,'when the app is not connected the proxy fails closed');assert.equal(responses[1].error.code,-32700);assert.equal(responses[1].id,null);console.log('PASS packaged stdio executable: newline JSON, no GUI/banner, app-off error, notifications without replies and parse errors');

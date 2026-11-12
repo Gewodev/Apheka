@@ -1,0 +1,167 @@
+[
+  {
+    "view": "inicio",
+    "performance": {
+      "idleSampleMs": 1207,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 11
+    }
+  },
+  {
+    "view": "inicio",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "estudio",
+    "performance": {
+      "idleSampleMs": 1214,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 14
+    }
+  },
+  {
+    "view": "estudio",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "tareas",
+    "performance": {
+      "idleSampleMs": 1217,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 11
+    }
+  },
+  {
+    "view": "tareas",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "notas",
+    "performance": {
+      "idleSampleMs": 1216,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 11
+    }
+  },
+  {
+    "view": "notas",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "musica",
+    "performance": {
+      "idleSampleMs": 1204,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 10
+    }
+  },
+  {
+    "view": "musica",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "planificacion",
+    "performance": {
+      "idleSampleMs": 1208,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 12
+    }
+  },
+  {
+    "view": "planificacion",
+    "scrollablePanels": 1
+  },
+  {
+    "view": "cursos",
+    "performance": {
+      "idleSampleMs": 1217,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 10
+    }
+  },
+  {
+    "view": "cursos",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "curso_detalle",
+    "performance": {
+      "idleSampleMs": 1207,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 15
+    }
+  },
+  {
+    "view": "curso_detalle",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "ia",
+    "chatHeight": 944,
+    "nav": []
+  },
+  {
+    "view": "ia",
+    "performance": {
+      "idleSampleMs": 1216,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 0,
+      "scrollFrameP95Ms": null,
+      "longestTaskMs": 0,
+      "heapMiB": 11
+    }
+  },
+  {
+    "view": "ia",
+    "scrollablePanels": 0
+  },
+  {
+    "view": "ajustes",
+    "performance": {
+      "idleSampleMs": 1215,
+      "idleLongTasks": 0,
+      "scrollLongTasks": 0,
+      "scrollFrames": 36,
+      "scrollFrameP95Ms": 31.2,
+      "longestTaskMs": 0,
+      "heapMiB": 11
+    }
+  },
+  {
+    "view": "ajustes",
+    "scrollablePanels": 3
+  }
+]

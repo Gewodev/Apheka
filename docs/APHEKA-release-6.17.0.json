@@ -1,0 +1,94 @@
+{
+  "version": "6.17.0",
+  "installer": "verified",
+  "frontendTypecheck": "passed",
+  "nativeUnitTests": {
+    "passed": 26,
+    "failed": 0
+  },
+  "playback": {
+    "localWav": "passed, manual/automatic next, library-only random, all/one/none repeat and membership changes",
+    "youtubeControls": "passed with controlled IFrame API fixture, no iframe recreation for repeat-one",
+    "randomQueue": "hidden, Aleatorio state visible",
+    "repeatModes": "independent of shuffle",
+    "orderedQueue": "passed, maximum five rows, up/down, drag/drop, remove/backfill and automatic advance in chosen order",
+    "favorites": "passed, auto-save to library, old favorites repair, rapid toggles, unfavorite retains library, explicit unsave clears favorite, cover/reload and MCP title edit retain favorite"
+  },
+  "lyrics": {
+    "bothViews": "passed, forward/back seek, pause, first/last verse, resize, cached track change",
+    "sourceClockGuard": "passed, ignores old recording while new source loads",
+    "recordingMatchToleranceSeconds": 2,
+    "cacheRevision": 3,
+    "lookupNormalization": "passed, imported artist prefix and Topic removed",
+    "limitation": "Synchronized lyrics require real timestamps for the matching recording; plain lyrics are not assigned invented times.",
+    "firstAndLastVerse": "passed, natural start without leading gap, centered later verses when possible",
+    "smoothFollowing": "passed, native scroll intermediate positions on normal verse advance; instant seek and resize"
+  },
+  "connector": {
+    "domainCrud": "passed",
+    "nestedStudyTools": "passed, all deck modes, sources, folders, tags, materials, paged PDF and reload",
+    "settingsAndPrompt": "passed, eight client configurations, manual copy if clipboard blocked, secrets masked",
+    "nativeEndToEnd": "passed on isolated com.apheka.qa, real HTTP initialize/list/create/edit/read/delete approval/stop",
+    "performance": "bridge reads current snapshot on demand rather than subscribing to each timer/audio update",
+    "externalClientAccount": "not configured by these tests",
+    "trackEdits": "passed, title/artist/lyric offset update does not toggle existing favorite"
+  },
+  "ui": {
+    "notesResources": "passed",
+    "playlists": "passed",
+    "downloadPreferences": "passed",
+    "sessionDialog": "passed, 1200/900/420, date/time/duration/repeat validation/portal selectors/save",
+    "sessionPreview": "passed, original horizontal organization retained, bounds 1200/700/420",
+    "pomodoro": "passed, 260x194, no final-clock field, exact one-minute adjustments",
+    "sessionPlannerDate": "passed, chosen session date survives strict-mode remount",
+    "banner": "passed, original retained, repeated crop, pan/zoom, responsive preview/export geometry, reload/reset/cancel and no empty exported edges",
+    "downloads": "refined solid output controls, unified search surface, status/action spacing and responsive preference layout",
+    "bannerGeometry": "passed, 4 source ratios including legacy crop, 3 zoom levels, normalized edge clamping and responsive/export agreement"
+  },
+  "performance": {
+    "renderBlockingRemoteFontsRemoved": true,
+    "lyricsClock": "only visible and playing, 250 ms",
+    "destructiveCacheSweep": false,
+    "canonicalToolCopies": 3
+  },
+  "personalData": "untouched; native QA used separate application identifier",
+  "productionValidation": "passed final frontend: saved cover and favorite promotion/reload; five-row editable queue and random suppression; natural-start smooth lyrics with pause/seek/resize/track changes; repeated banner crop and original persistence; preserved horizontal course session preview and edit; compact Pomodoro; retired state cleanup; ten-result discovery; local offline playback, volume and responsive bottom player",
+  "recommendations": {
+    "hydration": "waits for loaded personal preferences",
+    "duplicateQueries": "passed, shared pending lookup, independent subscriber abort and cache reuse",
+    "savedCover": "passed, library metadata and reload",
+    "discoverPageSize": 10
+  },
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.17.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80240408,
+    "sha256": "B03D68D47B65AD7165AABBAC0535E852A5EE2B8A6E3C8C924F75C10F38C7BCF8",
+    "modifiedAtUtc": "2026-10-28T13:16:13.4797560Z",
+    "sourceLatestEditUtc": "2026-10-28T13:06:59.0028427Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-DitJCieA.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-DBrC6MJC.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "nativeBuild": "passed",
+  "embeddedViews": 9,
+  "currentBrowserSdkEmbedded": true,
+  "toolCopies": 3,
+  "toolHashes": "passed",
+  "sourceSignatureCheckedByPackager": true,
+  "localMathEngineEmbedded": true,
+  "localMathFontsEmbedded": 19
+}

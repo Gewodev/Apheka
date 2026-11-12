@@ -1,0 +1,10 @@
+from pathlib import Path
+p=Path('src/components/ui/CharvisChatSurface.tsx');s=p.read_text(encoding='utf-8');s=s.replace("[menu,setMenu]=useState(false)","[menu,setMenu]=useState(false),[historyOpen,setHistoryOpen]=useState(false)")
+s=s.replace('const showRail=p.page?rail:rail&&menu;','const showRail=p.page?rail:historyOpen;\n const locked=p.busy||p.audioBusy||p.voice.recording||p.voice.transcribing;')
+s=s.replace('setRail(true);setMenu(value=>!value);','setHistoryOpen(value=>!value);')
+s=s.replace('aria-expanded={menu&&!showRail}','aria-expanded={menu}').replace('{menu&&!showRail&&','{menu&&')
+s=s.replace("p.entries.filter(e=>e.message.role!=='tool'&&messageText(e))","p.entries.filter(e=>e.message.role!=='tool'&&(messageText(e)||e.attachments?.length))")
+s=s.replace('disabled={p.busy||!p.ready}','disabled={locked||!p.ready}').replace('disabled={p.busy} onClick={()=>setProjectForm','disabled={locked} onClick={()=>setProjectForm')
+s=s.replace('onClick={p.voice.cancel}><X size={13}/>', 'onClick={p.audioBusy?p.onStop:p.voice.cancel}><X size={13}/>')
+p.write_text(s,encoding='utf-8')
+p=Path('src/components/ui/CharvisSidebar.tsx');s=p.read_text(encoding='utf-8');s=s.replace('onNew={()=>{if(busy)return;', 'onNew={()=>{if(busy||audioBusy||voice.recording||voice.transcribing)return;').replace('onOpen={id=>{if(busy)return;', 'onOpen={id=>{if(busy||audioBusy||voice.recording||voice.transcribing)return;');p.write_text(s,encoding='utf-8')

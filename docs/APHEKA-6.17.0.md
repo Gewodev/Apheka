@@ -1,0 +1,23 @@
+# APHEKA 6.17.0
+
+Estado: instalador final 6.17.0 compilado y verificado. Archivo: `release/apheka_FINAL.exe`. Tamaño: 80240408 bytes. SHA-256: `B03D68D47B65AD7165AABBAC0535E852A5EE2B8A6E3C8C924F75C10F38C7BCF8`. Incluye las nueve vistas actuales, el SDK musical corregido y una copia de cada una de las tres herramientas.
+
+Aleatorio y repetición comparten ahora la misma selección en el audio local, YouTube y el conector MCP. Aleatorio oculta las canciones futuras y muestra su nombre; repetir canción y repetir colección funcionan de forma independiente. Sin bucle, el recorrido se detiene al terminar. Las vistas previas de Descubrir no entran en Aleatorio hasta guardarlas en la biblioteca.
+
+Las letras siguen el tiempo real del audio y conservan el centrado en la vista lateral y la portada grande al pausar, buscar otra posición y cambiar de canción. La búsqueda normaliza títulos importados y exige una duración compatible con la grabación. La caché se conserva; una letra sin marcas temporales reales se muestra como texto, sin inventar sincronización. [LRCLIB](https://lrclib.net/docs) documenta la tolerancia de dos segundos y la posibilidad de no disponer de letras sincronizadas. El reloj usa los eventos del audio y [getCurrentTime de YouTube](https://developers.google.com/youtube/iframe_api_reference#Playback_status).
+
+Se retiraron las ventanas de vídeo antiguas y sus claves de restauración. La limpieza es específica: conserva canciones, listas, notas y cachés útiles. Descubrir mantiene diez resultados, memoria local de búsquedas y recomendaciones basadas en artistas, favoritos y escuchas.
+
+El ajuste del Pomodoro por clic derecho queda compacto, con minutos y barra de duración; se elimina la hora de finalización. En Cursos se conserva el orden de la vista previa horizontal y se ajustan sus márgenes y límites de pantalla. La edición de sesiones usa campos legibles, controles compartidos, validación de repetición y pie de acciones visible. Se corrige la apertura de la edición antes de terminar la carga y desde una vista diferente.
+
+Los botones principales y secundarios comparten contraste, contorno, tipografía y foco de teclado. Se eliminan las fuentes remotas que bloqueaban el arranque; las familias principales se sirven localmente. El puente de IA consulta el estado cuando recibe una solicitud y evita suscribirse a cada actualización del temporizador o del audio.
+
+El conector muestra el prompt preparado aunque el portapapeles esté bloqueado. Se comprobaron sus configuraciones para ocho clientes y sus operaciones sobre notas, tareas, cursos, materiales, fuentes, carpetas, etiquetas, herramientas, planificación y ajustes. También se probó el transporte MCP real en una instancia nativa aislada: conexión, listado, creación, edición, lectura, confirmación y borrado. Estas pruebas no configuran la cuenta de un asistente externo ni sustituyen su permiso de conexión.
+
+Validación: comprobación de tipos, 26 pruebas nativas y pruebas de interfaz, audio WAV, letras, notas, listas, configuración del conector y edición de sesiones. Las solicitudes externas de catálogos o letras siguen dependiendo de la disponibilidad del proveedor y de la red. No se modificó la instalación ni los datos personales del usuario.
+
+Correcciones finales de esta revisión: la cola ordenada muestra como máximo cinco filas, permite subir/bajar, arrastrar y quitar canciones, y avanza en el orden editado. En Aleatorio no se muestran canciones futuras. Favoritos incorpora automáticamente la canción a Mis canciones; quitar el favorito conserva la biblioteca y quitar la canción elimina su favorito. Se reparan las favoritas antiguas ocultas una vez al cargar. Las portadas se conservan al guardar desde Descubrir y después de recargar.
+
+Las letras empiezan arriba, sin hueco inicial. El avance normal entre versos usa desplazamiento suave nativo; los saltos de reproducción y cambios de tamaño se resuelven directamente. Las búsquedas iguales en curso se comparten y los resultados se reutilizan en caché; cancelar un consumidor no cancela el de otro. Descubrir espera la carga de las preferencias personales antes de recomendar. El transporte del catálogo conserva HTTPS y la configuración de red elegida, sin cambiar el transporte del audio.
+
+El banner conserva ahora la imagen original y un encuadre normalizado por separado. Las siguientes ediciones reutilizan esa original y su ajuste, incluso tras guardar y reabrir. La ampliación permite reencuadrar también banners antiguos que solo conservaban su recorte. Vista previa y exportación usan la misma geometría, sin esquinas vacías. Se mejoran los controles y superficies de Descargas sin cambiar su organización.

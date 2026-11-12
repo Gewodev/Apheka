@@ -1,0 +1,210 @@
+{
+  "type": "MusicResponsiveListItem",
+  "flex_columns": [
+    {
+      "type": "MusicResponsiveListItemFlexColumn",
+      "title": {
+        "text": "Morat",
+        "runs": [
+          {
+            "text": "Morat",
+            "bold": false,
+            "bracket": false,
+            "deemphasize": false,
+            "italics": false,
+            "strikethrough": false,
+            "error_underline": false,
+            "underline": false
+          }
+        ],
+        "rtl": false
+      },
+      "display_priority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+    },
+    {
+      "type": "MusicResponsiveListItemFlexColumn",
+      "title": {
+        "text": "Artista • 12,3 M usuarios mensuales",
+        "runs": [
+          {
+            "text": "Artista",
+            "bold": false,
+            "bracket": false,
+            "deemphasize": false,
+            "italics": false,
+            "strikethrough": false,
+            "error_underline": false,
+            "underline": false
+          },
+          {
+            "text": " • ",
+            "bold": false,
+            "bracket": false,
+            "deemphasize": false,
+            "italics": false,
+            "strikethrough": false,
+            "error_underline": false,
+            "underline": false
+          },
+          {
+            "text": "12,3 M usuarios mensuales",
+            "bold": false,
+            "bracket": false,
+            "deemphasize": false,
+            "italics": false,
+            "strikethrough": false,
+            "error_underline": false,
+            "underline": false
+          }
+        ],
+        "accessibility": {
+          "accessibility_data": {
+            "label": "Artista • 12,3 M usuarios mensuales"
+          }
+        },
+        "rtl": false
+      },
+      "display_priority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+    }
+  ],
+  "fixed_columns": [],
+  "endpoint": {
+    "type": "NavigationEndpoint",
+    "name": "browseEndpoint",
+    "payload": {
+      "browseId": "UCyZgGJiy9vum1xD7hXWG_rA",
+      "browseEndpointContextSupportedConfigs": {
+        "browseEndpointContextMusicConfig": {
+          "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+        }
+      }
+    },
+    "metadata": {
+      "api_url": "/browse"
+    },
+    "command": {
+      "type": "BrowseEndpoint"
+    }
+  },
+  "item_type": "artist",
+  "thumbnail": {
+    "type": "MusicThumbnail",
+    "contents": [
+      {
+        "url": "https://yt3.googleusercontent.com/m-weyk9h7uYMf7nPhtkOO5uGIwo4293Mpa8_n1k5v4XCV4tLOKuPET7PanknVltvO5r1q4vUJw=w120-h120-l90-rj",
+        "width": 120,
+        "height": 120
+      },
+      {
+        "url": "https://yt3.googleusercontent.com/m-weyk9h7uYMf7nPhtkOO5uGIwo4293Mpa8_n1k5v4XCV4tLOKuPET7PanknVltvO5r1q4vUJw=w60-h60-l90-rj",
+        "width": 60,
+        "height": 60
+      }
+    ]
+  },
+  "menu": {
+    "type": "Menu",
+    "items": [
+      {
+        "type": "MenuNavigationItem",
+        "text": "Aleatorio",
+        "icon_type": "MUSIC_SHUFFLE",
+        "endpoint": {
+          "type": "NavigationEndpoint",
+          "name": "watchPlaylistEndpoint",
+          "payload": {
+            "playlistId": "RDAO6bUBzqpSVca__rgQt4BURA",
+            "params": "wAEB8gECGAE%3D"
+          },
+          "metadata": {
+            "api_url": "/next"
+          }
+        }
+      },
+      {
+        "type": "MenuNavigationItem",
+        "text": "Iniciar mix",
+        "icon_type": "MIX",
+        "endpoint": {
+          "type": "NavigationEndpoint",
+          "name": "watchPlaylistEndpoint",
+          "payload": {
+            "playlistId": "RDEM6bUBzqpSVca__rgQt4BURA",
+            "params": "wAEB"
+          },
+          "metadata": {
+            "api_url": "/next"
+          }
+        }
+      },
+      {
+        "type": "MenuNavigationItem",
+        "text": "Compartir",
+        "icon_type": "SHARE",
+        "endpoint": {
+          "type": "NavigationEndpoint",
+          "name": "shareEntityEndpoint",
+          "payload": {
+            "serializedShareEntity": "GhhVQ3laZ0dKaXk5dnVtMXhEN2hYV0dfckE%3D",
+            "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+          },
+          "metadata": {},
+          "command": {
+            "type": "ShareEntityEndpoint"
+          }
+        }
+      }
+    ],
+    "flexible_items": [],
+    "top_level_buttons": [],
+    "accessibility": {
+      "accessibility_data": {
+        "label": "Menú de acciones"
+      }
+    }
+  },
+  "id": "UCyZgGJiy9vum1xD7hXWG_rA",
+  "name": "Morat",
+  "subtitle": {
+    "text": "Artista • 12,3 M usuarios mensuales",
+    "runs": [
+      {
+        "text": "Artista",
+        "bold": false,
+        "bracket": false,
+        "deemphasize": false,
+        "italics": false,
+        "strikethrough": false,
+        "error_underline": false,
+        "underline": false
+      },
+      {
+        "text": " • ",
+        "bold": false,
+        "bracket": false,
+        "deemphasize": false,
+        "italics": false,
+        "strikethrough": false,
+        "error_underline": false,
+        "underline": false
+      },
+      {
+        "text": "12,3 M usuarios mensuales",
+        "bold": false,
+        "bracket": false,
+        "deemphasize": false,
+        "italics": false,
+        "strikethrough": false,
+        "error_underline": false,
+        "underline": false
+      }
+    ],
+    "accessibility": {
+      "accessibility_data": {
+        "label": "Artista • 12,3 M usuarios mensuales"
+      }
+    },
+    "rtl": false
+  },
+  "subscribers": ""
+}

@@ -1,5 +1,5 @@
 import SessionTaskLink from '../../ui/SessionTaskLink';
-import {useAppSlice} from "../../../store/AppContext";
+import {useAppSlice,useTaskPresentationSlice} from "../../../store/AppContext";
 import { sessionLinkUnavailable } from '../../../lib/linkEligibility';
 import { readFeatured, hydrateFeatured, setFeaturedEvent, FEATURED_CHANGED } from '../../../lib/featuredEvent';
 import React,{useRef} from 'react';
@@ -34,8 +34,11 @@ interface LateralPanelProps {
   onFileMoved?: (evId: string, oldUrl: string, newPath: string) => void;
 }
 
-export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onSelectSession, onFileMoved }: LateralPanelProps) {
-  const { settings, tasks } = useAppSlice(["settings","tasks"]);
+export default function LateralPanel(props:LateralPanelProps){
+  return props.item?<OpenLateralPanel {...props}/>:null;
+}
+function OpenLateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onSelectSession, onFileMoved }: LateralPanelProps) {
+  const { settings, tasks } = useTaskPresentationSlice(["settings","tasks"]);
   const tf = settings?.timeFormat;
   const panelRef=useRef<HTMLDivElement>(null);useDialogFocus(panelRef,!!item,onClose);
   if (!item) return null;

@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict'),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'C:/Users/USER/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{const b=await chromium.launch({channel:'msedge',headless:true});try{const p=await b.newPage({viewport:{width:1440,height:960}}),errors=[];p.on('pageerror',e=>errors.push(e.message));await p.route('https://lrclib.net/api/**',r=>r.fulfill({status:404,body:'{}'}));
+await p.addInitScript(()=>{if(sessionStorage.getItem('room610'))return;sessionStorage.setItem('room610','1');localStorage.setItem('apheka_route_v2',JSON.stringify({view:'musica',courseId:null}));const cover='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="#355c74"/><circle cx="300" cy="300" r="190" fill="#b9d0ce"/><circle cx="300" cy="300" r="130" fill="#355c74"/></svg>');localStorage.setItem('owa_studio_data',JSON.stringify({_savedAt:Date.now(),settings:{notifications:false,fontFamily:'IBM Plex Sans'},tracks:[{id:'cached-video',title:'Canción de prueba',artist:'Pruebas APHEKA',duration:20,source:'youtube',url:'https://www.youtube.com/watch?v=i6qPUlK72yc',localAudioPath:'cached.wav',coverImage:cover,isFavorite:false,listenedTime:0}]}));});
+await p.goto(process.env.APHEKA_QA_URL||'http://127.0.0.1:1422');await p.getByRole('button',{name:'Reproducir Canción de prueba',exact:true}).waitFor();
+await p.evaluate(async()=>{const bytes=new Uint8Array(44+8000*2*20),v=new DataView(bytes.buffer),str=(at,s)=>[...s].forEach((c,i)=>bytes[at+i]=c.charCodeAt(0));str(0,'RIFF');v.setUint32(4,bytes.length-8,true);str(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,bytes.length-44,true);const {addTrackFileToDB}=await import('/src/lib/musicDb.ts');await addTrackFileToDB('cached-video',new File([bytes],'cached.wav',{type:'audio/wav'}));});
+
+await p.route('https://api.lyrics.ovh/**',r=>r.fulfill({status:404,body:'{}'}));
+await p.getByRole('button',{name:'Reproducir Canción de prueba',exact:true}).click();
+await p.getByRole('button',{name:'Ocultar en esta canción',exact:true}).waitFor();
+await p.getByRole('button',{name:'Volver a buscar',exact:true}).click();
+await p.getByRole('button',{name:'Ocultar en esta canción',exact:true}).click();
+await p.waitForFunction(()=>!document.querySelector('.quiet-inspector-lyrics'));
+await p.locator('.quiet-inspector-queue').waitFor();
+await p.getByRole('button',{name:'Mostrar letra de esta canción',exact:true}).click();
+await p.getByRole('button',{name:'Ocultar en esta canción',exact:true}).waitFor();
+await p.getByRole('button',{name:'Ocultar en esta canción',exact:true}).click();
+await p.waitForTimeout(1400);await p.reload();
+await p.getByRole('button',{name:'Mostrar letra de esta canción',exact:true}).waitFor();
+assert.equal(await p.locator('.quiet-inspector-lyrics').count(),0);
+await p.getByRole('button',{name:'Ampliar canción del panel',exact:true}).click();
+await p.getByRole('button',{name:'Mostrar letra',exact:true}).click();
+await p.getByRole('dialog',{name:'Sala de escucha',exact:true}).getByRole('button',{name:'Ocultar en esta canción',exact:true}).click();
+assert.equal(await p.locator('.quiet-room-lyrics').count(),0);
+await p.getByRole('button',{name:'Cerrar sala de escucha',exact:true}).click();
+assert.equal(await p.locator('.quiet-inspector-lyrics').count(),0);
+assert.deepEqual(errors,[]);console.log('PASS missing lyrics retry, per-song hide, queue-only layout, durable restore and room toggle');
+}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});

@@ -1,0 +1,3 @@
+OpenRouter logo, original brand asset published by OpenRouterTeam.
+Source: https://github.com/OpenRouterTeam/sign-in-with-openrouter/blob/main/public/openrouter-logo.svg
+Brand guidelines: https://openrouter.ai/brand/

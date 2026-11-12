@@ -6,8 +6,19 @@ function Get-ArtifactSha256([string]$Path) {
   try { return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-','') }
   finally { $stream.Dispose(); $algorithm.Dispose() }
 }
+function Get-RepoFiles([string[]]$Roots) {
+  $found = New-Object System.Collections.Generic.List[string]
+  foreach ($root in $Roots) {
+    $full = Join-Path $repo $root
+    if (-not (Test-Path -LiteralPath $full)) { continue }
+    Get-ChildItem -LiteralPath $full -Recurse -File -Force | ForEach-Object {
+      $found.Add($_.FullName.Substring($repo.Length + 1).Replace('\','/'))
+    }
+  }
+  return $found.ToArray()
+}
 function Get-SourceSignature {
-  $files = @(& rg --files src public src-tauri/src src-tauri/installer-assets src-tauri/resources/asr) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
+  $files = @(Get-RepoFiles @('src','public','src-tauri/src','src-tauri/installer-assets','src-tauri/resources/asr')) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
   return [string]::Join("`n", @($files | Sort-Object | ForEach-Object { $_ + ':' + (Get-ArtifactSha256 (Join-Path $repo $_)) }))
 }
 function Get-ToolSignature {
@@ -26,8 +37,20 @@ try {
     & (Join-Path $PSScriptRoot 'update-tool-hashes.ps1')
     $sourceBeforeBuild = Get-SourceSignature
     $toolsBeforeBuild = Get-ToolSignature
-    & pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis
-    if ($LASTEXITCODE -ne 0) { throw 'Build failed; no final package was published' }
+    # pnpm escribe su banner en stderr; con ErrorActionPreference=Stop y
+    # PSNativeCommandUseErrorActionPreference activo eso se convertía en una
+    # NativeCommandExitException ~5 s después de arrancar. El resultado real
+    # se decide por $LASTEXITCODE, nunca por el texto de stderr.
+    $nativePrefWasSet = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
+    try {
+      & pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis
+      $buildExit = $LASTEXITCODE
+    }
+    finally {
+      $PSNativeCommandUseErrorActionPreference = $nativePrefWasSet
+    }
+    if ($buildExit -ne 0) { throw "Build failed (exit $buildExit); no final package was published" }
   }
   $config = Get-Content -LiteralPath (Join-Path $repo 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
   $version = $config.version
@@ -36,7 +59,7 @@ try {
   $source = Join-Path $repo "src-tauri/target/release/bundle/nsis/${product}_${version}_x64-setup.exe"
   $binary = Get-Item -LiteralPath $source
   if ($binary.VersionInfo.ProductName -ne $product -or $binary.VersionInfo.ProductVersion -ne $version) { throw 'Installer version mismatch' }
-  $sourceFiles = @(& rg --files src public src-tauri/src src-tauri/installer-assets src-tauri/resources/asr) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
+  $sourceFiles = @(Get-RepoFiles @('src','public','src-tauri/src','src-tauri/installer-assets','src-tauri/resources/asr')) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
   $latestSource = ($sourceFiles | ForEach-Object { (Get-Item -LiteralPath (Join-Path $repo $_)).LastWriteTimeUtc } | Sort-Object -Descending | Select-Object -First 1)
   $manifestRewrittenBeforeFrontend=$false
   if ($Build) {
@@ -53,7 +76,11 @@ try {
   if ($binary.LastWriteTimeUtc -lt $latestSource) { throw 'Source is newer than the installer; rebuild before publishing' }
   $html = [IO.File]::ReadAllText((Join-Path $repo 'dist/index.html'))
   $assets = @([regex]::Matches($html, '(?:src|href)="/([^\"]+\.(?:css|js))"') | ForEach-Object { $_.Groups[1].Value })
-  $embedded = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $repo 'src-tauri/target/release/owa-studio.exe')))
+  $executableName=if($config.mainBinaryName){$config.mainBinaryName}else{'owa-studio'}
+  $executablePath=Join-Path $repo ("src-tauri/target/release/$executableName.exe")
+  $executable=Get-Item -LiteralPath $executablePath
+  if($executable.VersionInfo.ProductName -ne $product -or $executable.VersionInfo.ProductVersion -ne $version){throw 'Executable brand/version mismatch'}
+  $embedded = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($executablePath))
   if ($assets.Count -eq 0) { throw 'Production frontend has no assets' }
   foreach ($asset in $assets) { if (-not $embedded.Contains($asset)) { throw "Executable contains an old frontend: $asset is missing" } }
   $release = [IO.Path]::GetFullPath((Join-Path $repo 'release'))
@@ -66,7 +93,7 @@ try {
   $finalHash = Get-ArtifactSha256 $final
   if ($sourceHash -ne $finalHash) { throw 'Copied installer hash mismatch' }
   $manifest = [ordered]@{
-    product=$product;version=$version;identifier=$config.identifier
+    product=$product;version=$version;identifier=$config.identifier;executable=($executableName+'.exe')
     file=($prefix+'_FINAL.exe');bytes=(Get-Item -LiteralPath $final).Length;sha256=$finalHash
     modifiedAtUtc=$binary.LastWriteTimeUtc.ToString('o');sourceLatestEditUtc=$latestSource.ToString('o')
     manifestRewrittenBeforeFrontend=$manifestRewrittenBeforeFrontend

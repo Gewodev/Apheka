@@ -1,0 +1,48 @@
+{
+  "version": "6.11.0",
+  "frontendBuild": "passed",
+  "viewCount": 9,
+  "legacyMusicBundled": false,
+  "nativeUnitTests": 2,
+  "realNetwork": [
+    "automatic system",
+    "direct HTTPS",
+    "custom CONNECT proxy"
+  ],
+  "installer": "verified",
+  "previousInstallerVersion": "6.10.0",
+  "productionMusicTests": "passed",
+  "productionPlayerAndLaptopTests": "passed",
+  "sdkProductionInitialization": "fixed_and_verified",
+  "emojiUiAudit": "passed",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.11.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 79263829,
+    "sha256": "B4452508E60480C7F7CA4C25907481CCEAC326070C163162511F5501993523CA",
+    "modifiedAtUtc": "2026-10-26T14:18:02.9283479Z",
+    "sourceLatestEditUtc": "2026-10-26T01:48:24.8426577Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-BqLhMuun.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-BH3IWCy8.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "nativeBuild": "passed",
+  "embeddedViews": 9,
+  "currentBrowserSdkEmbedded": true,
+  "toolCopies": 3,
+  "toolHashes": "passed",
+  "sourceSignatureCheckedByPackager": true
+}

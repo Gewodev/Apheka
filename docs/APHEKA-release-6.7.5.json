@@ -1,0 +1,94 @@
+{
+  "product": "APHEKA",
+  "version": "6.7.5",
+  "dateLocal": "2026-10-23",
+  "timezone": "America/Lima",
+  "checks": {
+    "typescript": true,
+    "productionFrontendBuild": true,
+    "courseHub": {
+      "cards": 12,
+      "widths": [
+        800,
+        900,
+        1000,
+        1100,
+        1200,
+        1440
+      ],
+      "sidebarTransitions": 24,
+      "sampledDuringTransition": true,
+      "overlap": false,
+      "reorderAndReload": true
+    },
+    "courseDetail": {
+      "views": [
+        "overview",
+        "study",
+        "topic"
+      ],
+      "widths": [
+        800,
+        900,
+        1000,
+        1200,
+        1440
+      ],
+      "sidebarExpandedAndCollapsed": true
+    },
+    "mcp": {
+      "clientProfiles": 8,
+      "tools": 21,
+      "jsonAndTomlValidation": true,
+      "nativePanelCopyAndExportSimulation": true,
+      "secretExcludedFromPromptAndLocalStorage": true,
+      "domainCrudAndStudyTools": true
+    },
+    "pointer": {
+      "nativeWindowsWebView2": true,
+      "nativeQaBinaryVersion": "6.7.3",
+      "frontend": "current 6.7.5 sources",
+      "fullscreenWithoutMusic": true,
+      "fullscreenWithRealLocalAudio": true,
+      "drawnPointerMoves": true,
+      "clickThrough": true,
+      "cleanupOnExitAndBlur": true,
+      "softwareFallbackDefaultOnWindows": true,
+      "hardwareFreezeRootCauseConfirmed": false
+    },
+    "playback": {
+      "realWavInIndexedDb": true,
+      "fullscreenCycles": 3,
+      "sourceAndTimeContinuous": true,
+      "pauseResume": true
+    },
+    "externalPdf": {
+      "browsers": [
+        "Chrome",
+        "Edge",
+        "Firefox",
+        "Brave",
+        "Opera"
+      ],
+      "realPathArguments": true,
+      "legacyAssetDecoded": true,
+      "separatePdfBrowserPreference": true
+    }
+  },
+  "installerVerification": "release/apheka_FINAL.json",
+  "personalInstallationModified": false,
+  "notes": "Build sources frozen. QA used a separate APHEKA QA data directory. Browser tests and actual WebView2 rendering verify the fallback, not the original hardware driver defect.",
+  "artifact": {
+    "bytes": 78818313,
+    "sha256": "BF375E953DDD2B526E2C65638FFB2949253C0A8AD7C91959B5F533F71D46A2B7",
+    "version": "6.7.5",
+    "nativeBundleVerified": true,
+    "lazyViewAssetsVerified": true,
+    "stdioExecutableTest": true
+  },
+  "sourceAudit": {
+    "firstGuardDetected": "Tauri CLI rewrote src-tauri/Cargo.toml at 04:01:18 UTC, before the native compilation",
+    "otherRuntimeSourcesModifiedDuringBuild": false,
+    "finalVerification": "existing native bundle checked against latest source timestamps, version, embedded frontend and SHA-256"
+  }
+}

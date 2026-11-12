@@ -1,0 +1,24 @@
+{
+  "product": "POHU",
+  "version": "6.26.6",
+  "identifier": "com.owa.studio",
+  "file": "pohu_FINAL.exe",
+  "bytes": 115483263,
+  "sha256": "105626E62A3B59AA470C0280FDE07FFB7A211B72D85162471AA10EE21DDFE389",
+  "modifiedAtUtc": "2026-11-11T19:29:12.5844713Z",
+  "sourceLatestEditUtc": "2026-11-11T19:07:25.1871987Z",
+  "manifestRewrittenBeforeFrontend": false,
+  "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+  "embeddedFrontendAssets": [
+    "assets/index-ESh0ZWEV.js",
+    "assets/charts-DKJleKn1.js",
+    "assets/anim-jyow7flR.js",
+    "assets/tauri-CWEvInMW.js",
+    "assets/storage-DwnyWBFG.js",
+    "assets/audio-meta-CT9Hv6Ta.js",
+    "assets/date-COeAPjBE.js",
+    "assets/index-BhF-qus_.css"
+  ],
+  "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+  "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+}

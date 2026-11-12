@@ -1,0 +1,72 @@
+{
+  "version": "6.14.0",
+  "installer": "verified",
+  "frontendTypecheck": "passed, production build",
+  "nativeNetworkTests": 3,
+  "firstDiscoverClick": "passed",
+  "persistentYouTubePlayer": "passed",
+  "nativeYouTubePlayback": {
+    "state": "passed",
+    "clockAdvancedSeconds": 1.5632,
+    "environment": "isolated com.apheka.qa WebView2, muted"
+  },
+  "nativeDownload": {
+    "state": "passed",
+    "exitCode": 0,
+    "fileEvents": 1,
+    "environment": "isolated QA output folder"
+  },
+  "realAudioConversion": {
+    "state": "passed",
+    "exitCode": 0,
+    "unicodePath": true
+  },
+  "lyricsTransitions": "passed, preview, next, next, previous cached",
+  "lyricsRoom": "passed, offline playback and responsive centered verses",
+  "libraryPagination": {
+    "list": 9,
+    "grid": 10
+  },
+  "completeLibraryQueue": "passed, newly saved preview and full shuffle; removing queued entry works",
+  "saveChoice": "passed",
+  "mathEngine": "passed, matrices, fractions, aligned multiline, integrals, Unicode, escaping and source preservation",
+  "courseMathEditing": "passed, live conversion, paste, double-click edit, undo/redo and persistence",
+  "normalNoteEditing": "passed",
+  "voiceTranscription": "deferred_by_user",
+  "canonicalToolCopies": 3,
+  "duplicateToolCopiesRemovedInPreviousRevision": 2,
+  "personalData": "untouched",
+  "productionValidation": "passed, music discovery/queue/pages/save, offline player/room/lyrics, course math editing and persistence",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.14.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80240307,
+    "sha256": "5055522ECE5E5820F3A59C469C19D8608B928B9506F75FBC2FDAA77EE968438A",
+    "modifiedAtUtc": "2026-10-27T13:14:28.7745369Z",
+    "sourceLatestEditUtc": "2026-10-27T12:38:10.5720947Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-Dd4S4unz.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-DtHS2dwI.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "nativeBuild": "passed",
+  "embeddedViews": 9,
+  "currentBrowserSdkEmbedded": true,
+  "toolCopies": 3,
+  "toolHashes": "passed",
+  "sourceSignatureCheckedByPackager": true,
+  "localMathEngineEmbedded": true,
+  "localMathFontsEmbedded": 19
+}

@@ -1,0 +1,7 @@
+from pathlib import Path
+s=Path('scripts/test-ui-6265.cjs').read_text('utf-8').replace('qa6265','qa6266').replace('qa-6265','qa-6266').replace('Comandos de APHEKA','Comandos de POHU')
+s=s.replace("await modal.getByRole('img',{name:'Horario de prueba',exact:true}).waitFor();","await modal.getByRole('img',{name:'Horario de prueba',exact:true}).waitFor();const compact=await modal.boundingBox();assert.ok(compact.height<520&&compact.width<950,JSON.stringify(compact));await page.screenshot({path:'release/qa-6266-horario.png'});")
+s=s.replace("assert.equal(await buttons.count(),7);","assert.equal(await buttons.count(),7);const positions=await buttons.evaluateAll(rows=>rows.map(e=>e.getBoundingClientRect().y));assert.ok(positions.every(y=>Math.abs(y-positions[0])<2));")
+# Append a real direct click on the new monthly event after it is saved.
+s=s.replace("await page.waitForFunction(()=>JSON.parse(localStorage.getItem('owa_planner_v3')||'{}').events?.some(e=>e.title==='Evento renovado'));","await page.waitForFunction(()=>JSON.parse(localStorage.getItem('owa_planner_v3')||'{}').events?.some(e=>e.title==='Evento renovado'));await page.locator('.month-event-entry').filter({hasText:'Evento renovado'}).first().click();await page.getByRole('dialog',{name:'Detalle del planificador',exact:true}).waitFor();await page.getByRole('button',{name:'Cerrar detalle del planificador',exact:true}).click();")
+Path('scripts/test-ui-6266.cjs').write_text(s,'utf-8')

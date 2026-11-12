@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Native focus resumes input with fullscreen unchanged and auxiliary window not destroyed",
+    "Explicit timer-hide recovery works immediately without waiting for a focus event",
+    "Visibility restoration recovers WebView focus and native cursor",
+    "No focus or cursor restoration while another window owns focus",
+    "Focus bursts coalesce; no polling or recursive recovery",
+    "Native cursor recovers outside exclusive fullscreen, including maximized windows",
+    "Dialog Escape, fullscreen Escape/F11 and normal-window focus remain correct",
+    "Denied native operation is recoverable; no runtime errors"
+  ],
+  "errors": [],
+  "scope": "Real React lifecycle in Edge; mocked Tauri IPC/focus and visibility. Physical Windows/GPU cursor not exercised."
+}

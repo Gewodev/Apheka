@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {generateWeekData,generateHourData,productiveSessions} from '../src/lib/studyAnalytics.ts';
+import {snapshotScore,isStateSnapshot} from '../src/lib/stateSnapshot.ts';
+const now=new Date('2026-10-12T12:00:00');
+const focus={type:'pomodoro',startedAt:new Date(2026,9,12,9).toISOString(),duration:1800,pauseDuration:600};
+const sessions=[focus,{...focus,type:'break'},{...focus,isDistraction:true},{...focus,duration:-20},{...focus,startedAt:'invalid'}];
+assert.equal(productiveSessions(sessions).length,1);
+const week=generateWeekData(sessions,now);
+assert.equal(week[0].day,'Mar');assert.equal(week[6].day,'Lun');
+assert.equal(week[6].productive,30);assert.equal(week[6].sessions,1);
+assert.equal(generateHourData(sessions)[9].efficiency,75);
+assert.equal(generateHourData(sessions)[8].efficiency,null);
+assert.equal(generateHourData([{...focus,type:'chrono',pauseDuration:NaN}])[9].efficiency,100);
+assert.equal(isStateSnapshot({tasks:[],notes:[]}),true);
+assert.equal(snapshotScore({_savedAt:3,tasks:[{dueDate:'2099-01-01'}]}),3);
+assert.equal(snapshotScore({tasks:[{dueDate:'2099-01-01'}]}),0);
+console.log('11/11 analytics and snapshot regression assertions passed');

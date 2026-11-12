@@ -58,7 +58,7 @@ Var ReinstallPageCheck
 !define WEBVIEW2BOOTSTRAPPERPATH "{{webview2_bootstrapper_path}}"
 !define WEBVIEW2INSTALLERPATH "{{webview2_installer_path}}"
 !define MINIMUMWEBVIEW2VERSION "{{minimum_webview2_version}}"
-; Preserve upgrade identity and install location across the POHU name change.
+; Preserve upgrade identity and install location across the product name change.
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA"
 !define MANUKEY "Software\${MANUFACTURER}"
 !define MANUPRODUCTKEY "${MANUKEY}\APHEKA"
@@ -77,8 +77,8 @@ Var WixMode
 Var OldMainBinaryName
 
 Name "${PRODUCTNAME}"
-BrandingText "APHEKA ${VERSION} · Gewodev"
-Caption "APHEKA ${VERSION} · Instalar y actualizar"
+BrandingText "POUH ${VERSION} · Gewodev"
+Caption "POUH ${VERSION} · Instalar y actualizar"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -89,7 +89,7 @@ InstallDir "${PLACEHOLDER_INSTALL_DIR}"
 
 VIProductVersion "${VERSIONWITHBUILD}"
 VIAddVersionKey "ProductName" "${PRODUCTNAME}"
-VIAddVersionKey "FileDescription" "APHEKA · Instalador de escritorio"
+VIAddVersionKey "FileDescription" "POUH · Instalador de escritorio"
 VIAddVersionKey "Comments" "Estudio, organización y Charvis en un solo espacio."
 VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -651,6 +651,11 @@ Section Install
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
+  ReadRegStr $OldMainBinaryName SHCTX "${UNINSTKEY}" "MainBinaryName"
+  ${If} $OldMainBinaryName == "owa-studio.exe"
+  ${AndIf} ${FileExists} "$INSTDIR\owa-studio.exe"
+    !insertmacro CheckIfAppIsRunning "owa-studio.exe" "${PRODUCTNAME}"
+  ${EndIf}
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
   ; Copy main executable

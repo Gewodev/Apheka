@@ -1,0 +1,45 @@
+{
+  "deezer": {
+    "ok": true,
+    "title": "En mode 60",
+    "count": 50,
+    "total": 50,
+    "sample": [
+      {
+        "channel": "The Beatles",
+        "duration": 429,
+        "id": "deezer:116348632",
+        "thumbnail": "https://cdn-images.dzcdn.net/images/cover/c65b3bd84e81056e060be144381c06c8/250x250-000000-80-0-0.jpg",
+        "title": "Hey Jude (Remastered 2015)",
+        "webpage_url": "https://www.deezer.com/track/116348632"
+      },
+      {
+        "channel": "Louis Armstrong",
+        "duration": 140,
+        "id": "deezer:92551068",
+        "thumbnail": "https://cdn-images.dzcdn.net/images/cover/9e92eafc4763ff46daa2e17b6df33717/250x250-000000-80-0-0.jpg",
+        "title": "What a Wonderful World (Remastered)",
+        "webpage_url": "https://www.deezer.com/track/92551068"
+      },
+      {
+        "channel": "The Moody Blues",
+        "duration": 265,
+        "id": "deezer:366450991",
+        "thumbnail": "https://cdn-images.dzcdn.net/images/cover/ab19dfe1340d810a1146a16f5230b3c6/250x250-000000-80-0-0.jpg",
+        "title": "Nights In White Satin",
+        "webpage_url": "https://www.deezer.com/track/366450991"
+      }
+    ],
+    "ms": 2608
+  },
+  "spotifyWithoutAuth": {
+    "ok": false,
+    "error": "Spotify requiere un token de acceso con permiso para leer esta lista. Pégalo en Autorización de Spotify; no se guarda. También puedes importar el enlace público equivalente de YouTube Music o Deezer.",
+    "ms": 4
+  },
+  "blockedHost": {
+    "ok": false,
+    "error": "Este servicio no está disponible para importar listas",
+    "ms": 3
+  }
+}

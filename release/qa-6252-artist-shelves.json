@@ -1,0 +1,623 @@
+[
+  {
+    "type": "MusicShelf",
+    "title": "Canciones más escuchadas",
+    "endpoint": {
+      "browseId": "VLOLAK5uy_lhdGTvMHhRI0eg6mnhi1Zlia8vb_hzQzg",
+      "params": "ggMCCAI%3D",
+      "browseEndpointContextSupportedConfigs": {
+        "browseEndpointContextMusicConfig": {
+          "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+        }
+      }
+    },
+    "contents": [
+      {
+        "type": "MusicResponsiveListItem",
+        "title": "COQUETA",
+        "id": "fPczdTA1xU0",
+        "artists": [
+          {
+            "name": "Fuerza Regida",
+            "channel_id": "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Grupo Frontera",
+            "channel_id": "UCJa2FF4TUB13Mm0GurZAqog",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJa2FF4TUB13Mm0GurZAqog",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "MusicResponsiveListItem",
+        "title": "EL AMOR DE SU VIDA",
+        "id": "Qa4l4eLxb3Q",
+        "artists": [
+          {
+            "name": "Grupo Frontera",
+            "channel_id": "UCJa2FF4TUB13Mm0GurZAqog",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJa2FF4TUB13Mm0GurZAqog",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Grupo Firme",
+            "channel_id": "UCJKREB2c3dO8dgdo8FtdO_A",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJKREB2c3dO8dgdo8FtdO_A",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "MusicResponsiveListItem",
+        "title": "un x100to",
+        "id": "xoLfYjX5nzs",
+        "artists": [
+          {
+            "name": "Grupo Frontera",
+            "channel_id": "UCJa2FF4TUB13Mm0GurZAqog",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJa2FF4TUB13Mm0GurZAqog",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Bad Bunny",
+            "channel_id": "UCiY3z8HAGD6BlSNKVn2kSvQ",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCiY3z8HAGD6BlSNKVn2kSvQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "MusicResponsiveListItem",
+        "title": "QUE VUELVAS",
+        "id": "9hZ_1wKt6MI",
+        "artists": [
+          {
+            "name": "Grupo Frontera",
+            "channel_id": "UCJa2FF4TUB13Mm0GurZAqog",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJa2FF4TUB13Mm0GurZAqog",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Carín León",
+            "channel_id": "UCGr3AcxG5Ubp4kByu7l5SSA",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCGr3AcxG5Ubp4kByu7l5SSA",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "MusicResponsiveListItem",
+        "title": "ME JALO",
+        "id": "J-LZsS1zxXI",
+        "artists": [
+          {
+            "name": "Fuerza Regida",
+            "channel_id": "UC0kxNxFQCK6d2spPz5Sme7Q",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UC0kxNxFQCK6d2spPz5Sme7Q",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Grupo Frontera",
+            "channel_id": "UCJa2FF4TUB13Mm0GurZAqog",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCJa2FF4TUB13Mm0GurZAqog",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "El Comienzo",
+        "id": "MPREb_BLUnel72lUI",
+        "artists": []
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Con dolor",
+        "id": "MPREb_4tXxEXESmGt",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Cada Vez Me Gusta Más",
+        "id": "MPREb_pzRGaSvkiNl",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Salma Hayek",
+        "id": "MPREb_qxSkurcVUPq",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Ojitos Bellos",
+        "id": "MPREb_3jlZrXukJTI",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Un Solo Corazón",
+        "id": "MPREb_N9MU2e3vXKS",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "IMPOSIBLE",
+        "id": "MPREb_fb1vPYprvns",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Beses Asi",
+        "id": "MPREb_vcctcGVkvc0",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "no lo ves",
+        "id": "MPREb_yjbxP5nUrlZ",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Modo Difícil",
+        "id": "MPREb_BDfXiEJpcCa",
+        "artists": []
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "No Capea",
+        "id": "MPREb_K1RtjxYZEOT",
+        "artists": []
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "COQUETA",
+        "id": "G4-grGfxVoY"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "EL AMOR DE SU VIDA",
+        "id": "Vr1M_l-1wjc"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "un x100to",
+        "id": "3inw26U-os4"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Que Vuelvas",
+        "id": "gG3516BF5_w"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "ME JALO",
+        "id": "VMz4Y0a5Mw4"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "OJITOS ROJOS (con Ke personajes)",
+        "id": "LTE9ktAcSQg"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "POR QUÉ SERÁ",
+        "id": "_G4MvUaaaLw"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Di Que Si",
+        "id": "jJAo2cn1IC0"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Hecha Pa' Mí",
+        "id": "IbE7peGTpmc"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "La Del Proceso",
+        "id": "KzdVBI0OdtM"
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "No Se Va (En Vivo)",
+        "id": "VtKcDwz6hiM"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "No Se Va (En Vivo)",
+        "id": "-1vsm5bhoyE"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Ya Me Entere (En Vivo)",
+        "id": "Dm_LR4kSvgI"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "La Ladrona (En Vivo)",
+        "id": "mH_buq-7qs0"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "La Pareja Ideal (En Vivo)",
+        "id": "gjkXX34Tjxk"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Medley Apache - Carin Leon",
+        "id": "T8eMruh5qig"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Mas Que Amigos (En Vivo)",
+        "id": "Fcgyn-T-LLk"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "El Ultimo Beso (En Vivo)",
+        "id": "_9AI2qBkD1o"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Si Yo Fuera Ladrón (con Profugos De Nuevo Leon)",
+        "id": "wHYQP8s3a-g"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Estos Celos (En Vivo)",
+        "id": "g2sWfTR9PC4"
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Presentando a Grupo Frontera",
+        "id": "VLRDCLAK5uy_lHCNj1eiqB1mI4euuvblMsKEVKm72X-_4"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Éxitos de Cumbia 2025",
+        "id": "VLRDCLAK5uy_mdfCrhJVBuFLwKQ7fnc-als6jwK0K1bOs"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Pura Sabrosura",
+        "id": "VLRDCLAK5uy_kQ2uag3ZJCpVPbrJdjPYi06aUgr-n1eX0"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Cumbias de Halloween",
+        "id": "VLRDCLAK5uy_m0d_Sm8prlRDr2Jkb-mi-HFsQizKjmBOc"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Cumbia Megamix",
+        "id": "VLRDCLAK5uy_k6ACq4WNfG-uJSz_jML9ZkUEULUoCzWIw"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Carne Asada Mix",
+        "id": "VLRDCLAK5uy_mr2FpFARhYAmSTXUBXg4MDpzcbyR3zqRQ"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Presenting Fuerza Regida",
+        "id": "VLRDCLAK5uy_lH2CVbgFx8ODUWk6d0pujnF_ukqm0kzSs"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Éxitos de Música Mexicana",
+        "id": "VLRDCLAK5uy_lxmPaVfijOqs2b3sBYIvoNn3-yIvDknMs"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Despecho",
+        "id": "VLRDCLAK5uy_m7gMEUfTIFcNbv_BlDoKtfCCW7yANKcps"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Esenciales de la Música Mexicana",
+        "id": "VLRDCLAK5uy_l5PtosQBTFpm24Dfd4YPpbUx2VzgiGpQc"
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Grupo Frontera - Con dolor",
+        "id": "VLPL_u4aYYWfB53X7tjhLeG31nKVKK09qydd"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "LO QUE ME FALTA POR LLORAR",
+        "id": "VLPL_u4aYYWfB51TY411NNmUK5s8C-YKmz0z"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Lo Mejor de Grupo Frontera 2025",
+        "id": "VLPL_u4aYYWfB51LCb0oW9vpYGfCIiy4IL0G"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Grupo Frontera - EL COMIENZO (Álbum Completo)",
+        "id": "VLPL_u4aYYWfB50GUKRF3FXHIQEA74-HvhRL"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Grupo Frontera - JUGANDO A QUE NO PASA NADA (Álbum Completo)",
+        "id": "VLPL_u4aYYWfB51YTeveoa0JYoPhaJVblFtP"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Grupo Frontera - Y Lo Que Viene EP",
+        "id": "VLPL_u4aYYWfB52jqK5Li7hLAofxg3j-ZFDX"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Setlist del Tour Jugando A Que No Pasa Nada por Grupo Frontera",
+        "id": "VLPL_u4aYYWfB53cFIZmG-d0MHDTwmljkrXE"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "MALA MÍA (EP) - Fuerza Regida x Grupo Frontera",
+        "id": "VLPL_u4aYYWfB52rsXnGvt0YrvVt2OJQRCom"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Setlist del Triste Pero Bien C*brón TOUR 2026",
+        "id": "VLPL_u4aYYWfB51DEnm4d8csYMM7BPEPrJMs"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Lo Mejor De Grupo Frontera 2026",
+        "id": "VLPL_u4aYYWfB53oarXDcDf8lU9EoUT_1hK8"
+      }
+    ]
+  },
+  {
+    "type": "MusicCarouselShelf",
+    "contents": [
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Christian Nodal",
+        "id": "UC_nxbep6wWeIEVb1UKn4euw"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Peso Pluma",
+        "id": "UCzmabbKsmXlWnI9N2kKQ4lA"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Fuerza Regida",
+        "id": "UC0kxNxFQCK6d2spPz5Sme7Q"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Julión Álvarez y su Norteño Banda",
+        "id": "UCYB_QAq6Td2oAvgx18tHDCQ"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Grupo Firme",
+        "id": "UCJKREB2c3dO8dgdo8FtdO_A"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Yahritza Y Su Esencia",
+        "id": "UC5oOy_NEadrnh0lXtJpzgjA"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Los Parras",
+        "id": "UC3tK3IbMItYf7CmQ-LFXROQ"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "NETON MUSIC",
+        "id": "UCHqMn3yv_kft6-kpbiMgDoA"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Xavi",
+        "id": "UCfmeXjlCXi37LGF7O2VT2zA"
+      },
+      {
+        "type": "MusicTwoRowItem",
+        "title": "Eden Muñoz",
+        "id": "UCtPkOPsVxV6wG2M2xoIE4hg"
+      }
+    ]
+  }
+]

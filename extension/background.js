@@ -1,4 +1,4 @@
-// ── OWA Studio — Ventanas v2.0: service worker autónomo ─────────────────────
+// ── APHEKA — Ventanas v2.0: service worker autónomo ─────────────────────
 // Todo vive en chrome.storage.local: sin app, sin servidor, sin emparejamiento.
 // Secciones: grupos de pestañas (CRUD), bloqueo de páginas y rendimiento.
 
@@ -56,10 +56,10 @@ async function openFolderTabs(name, urls, folderId) {
   if (ids.length >= 2 && chrome.tabGroups) {
     try {
       const gid = await chrome.tabs.group({ tabIds: ids });
-      await chrome.tabGroups.update(gid, { title: (name || 'OWA').slice(0, 24), color: 'pink' });
+      await chrome.tabGroups.update(gid, { title: (name || 'APHEKA').slice(0, 24), color: 'pink' });
       if (folderId) {
         const map = await getOpenGroups();
-        map[folderId] = { groupId: gid, title: name || 'OWA', at: Date.now() };
+        map[folderId] = { groupId: gid, title: name || 'APHEKA', at: Date.now() };
         await setOpenGroups(map);
       }
     } catch (e) { /* sin grupo: pestañas sueltas */ }

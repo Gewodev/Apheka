@@ -1,0 +1,1 @@
+let e=0;function a(){e++,document.documentElement.dataset.workspaceOverlay="true";let t=!1;return()=>{t||(t=!0,e=Math.max(0,e-1),e||delete document.documentElement.dataset.workspaceOverlay)}}export{a as h};

@@ -1,0 +1,21 @@
+{
+  "product": "APHEKA",
+  "version": "6.7.1",
+  "buildExitCode": 0,
+  "artifacts": [
+    {
+      "name": "APHEKA_6.7.1_x64-setup.exe",
+      "path": "D:\\VIBE\\Owa_Studio\\src-tauri\\target\\release\\bundle\\nsis\\APHEKA_6.7.1_x64-setup.exe",
+      "bytes": 78098873,
+      "modifiedAtUtc": "2026-10-13T03:22:39.974562+00:00",
+      "sha256": "e3be717ffb914e5b51ced34a1f985fc4783e7177d58f4214e5ed090e4481ec6a"
+    },
+    {
+      "name": "APHEKA_6.7.1_x64_en-US.msi",
+      "path": "D:\\VIBE\\Owa_Studio\\src-tauri\\target\\release\\bundle\\msi\\APHEKA_6.7.1_x64_en-US.msi",
+      "bytes": 99291136,
+      "modifiedAtUtc": "2026-10-13T03:20:08.099000+00:00",
+      "sha256": "736b40422ff478b94d0e72c8f0e3001d6fa9b798625c366e2e518db02ef282b8"
+    }
+  ]
+}

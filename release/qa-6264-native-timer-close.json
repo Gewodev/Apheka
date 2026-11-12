@@ -1,0 +1,84 @@
+{
+  "samples": [
+    {
+      "mode": "maximized",
+      "iteration": 0,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65539
+    },
+    {
+      "mode": "maximized",
+      "iteration": 1,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65539
+    },
+    {
+      "mode": "maximized",
+      "iteration": 2,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65539
+    },
+    {
+      "mode": "fullscreen",
+      "iteration": 0,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65541
+    },
+    {
+      "mode": "fullscreen",
+      "iteration": 1,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65539
+    },
+    {
+      "mode": "fullscreen",
+      "iteration": 2,
+      "focused": true,
+      "foregroundQa": true,
+      "cursorChecked": true,
+      "flags": 1,
+      "cursor": 65539
+    },
+    {
+      "mode": "restored",
+      "iteration": 0,
+      "focused": false,
+      "foregroundQa": false,
+      "cursorChecked": false,
+      "reason": "Other desktop activity; no claim about physical cursor visibility"
+    },
+    {
+      "mode": "restored",
+      "iteration": 1,
+      "focused": false,
+      "foregroundQa": false,
+      "cursorChecked": false,
+      "reason": "Other desktop activity; no claim about physical cursor visibility"
+    },
+    {
+      "mode": "restored",
+      "iteration": 2,
+      "focused": false,
+      "foregroundQa": false,
+      "cursorChecked": false,
+      "reason": "Other desktop activity; no claim about physical cursor visibility"
+    }
+  ],
+  "errors": [],
+  "scope": "Actual Windows/Tauri/WebView2 windows and FloatingTimer X handler, with responsive controls. Win32 visibility checked only when QA really owns foreground and pointer; otherwise explicitly skipped. Does not guarantee hardware cursor/GPU rendering."
+}

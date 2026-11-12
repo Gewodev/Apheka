@@ -1,0 +1,13 @@
+{
+  "updates": 120,
+  "before": {
+    "slice": 2,
+    "full": 8
+  },
+  "after": {
+    "slice": 2,
+    "full": 248
+  },
+  "unrelatedAdditionalRenders": 0,
+  "environment": "Isolated Edge/React StrictMode; render counts, not a physical FPS/GPU benchmark"
+}

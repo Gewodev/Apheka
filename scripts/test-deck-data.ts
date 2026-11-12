@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {readDeckData} from '../src/lib/deckData.ts';
+for(const value of ['null','[]','bad','"text"']) assert.deepEqual(readDeckData(value),{});
+assert.deepEqual(readDeckData('{"cards":null}'),{});
+assert.deepEqual(readDeckData('{"cards":[null,{}, {"q":"Q","a":"A"}]}').cards,[{q:'Q',a:'A'}]);
+assert.equal(readDeckData('{"questions":[{"q":"Q","options":["A","B"],"correct":4}]}').questions.length,0);
+assert.equal(readDeckData('{"seqs":[{"steps":["A"]},{"steps":["A","B"]}]}').seqs.length,1);
+assert.equal(readDeckData('{"items":[{"text":"Statement","answer":false}]}').items.length,1);
+assert.equal(readDeckData('{"concepts":[{"concept":"F","points":null}]}').concepts.length,0);
+console.log('PASS 10 imported deck data cases');

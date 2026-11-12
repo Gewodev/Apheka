@@ -1,0 +1,239 @@
+[
+  {
+    "title": "Álbumes y singles nuevos",
+    "sample": [
+      {
+        "kind": "album",
+        "title": "Mix Chocolate",
+        "artists": [
+          {
+            "name": "Las Estrellas de la Cumbia",
+            "channel_id": "UCuFOVYliVjWXRW4PdvGagJA",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCuFOVYliVjWXRW4PdvGagJA",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ],
+        "subtitle": "Single • Las Estrellas de la Cumbia"
+      },
+      {
+        "kind": "album",
+        "title": "Hermano",
+        "artists": [
+          {
+            "name": "Santana",
+            "channel_id": "UCX0rR7x8-nLew2t8UH-n2aw",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCX0rR7x8-nLew2t8UH-n2aw",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          },
+          {
+            "name": "Natalia Lafourcade",
+            "channel_id": "UC7aXhhV4nYhMS0oazBoaFkw",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UC7aXhhV4nYhMS0oazBoaFkw",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ],
+        "subtitle": "Single • Santana y Natalia Lafourcade"
+      },
+      {
+        "kind": "album",
+        "title": "No Voy a Llorar",
+        "artists": [
+          {
+            "name": "La Bella Luz",
+            "channel_id": "UCL1V7oZwU1mhRolRre3WKEw",
+            "endpoint": {
+              "type": "NavigationEndpoint",
+              "name": "browseEndpoint",
+              "payload": {
+                "browseId": "UCL1V7oZwU1mhRolRre3WKEw",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              },
+              "metadata": {
+                "api_url": "/browse"
+              },
+              "command": {
+                "type": "BrowseEndpoint"
+              }
+            }
+          }
+        ],
+        "subtitle": "Single • La Bella Luz"
+      }
+    ]
+  },
+  {
+    "title": "Ánimo y géneros",
+    "sample": [
+      {
+        "title": "",
+        "subtitle": ""
+      },
+      {
+        "title": "",
+        "subtitle": ""
+      },
+      {
+        "title": "",
+        "subtitle": ""
+      }
+    ]
+  },
+  {
+    "title": "Tendencias",
+    "sample": [
+      {
+        "kind": "video",
+        "title": "Orquesta La Bella Luz - No Voy A Llorar (Video Oficial)",
+        "subtitle": ""
+      },
+      {
+        "kind": "video",
+        "title": "Claveles de la cumbia | Mix haciendo el amor (en vivo)",
+        "subtitle": ""
+      },
+      {
+        "kind": "video",
+        "title": "Mix Loca de Amor - Las Estrellas de la Cumbia",
+        "subtitle": ""
+      }
+    ]
+  },
+  {
+    "title": "Vídeos musicales nuevos",
+    "sample": [
+      {
+        "kind": "video",
+        "title": "morena (Video Oficial)",
+        "author": {
+          "name": "Beéle",
+          "channel_id": "UCupC5VkgC20rKyJMyogoswQ",
+          "endpoint": {
+            "type": "NavigationEndpoint",
+            "name": "browseEndpoint",
+            "payload": {
+              "browseId": "UCupC5VkgC20rKyJMyogoswQ",
+              "browseEndpointContextSupportedConfigs": {
+                "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                }
+              }
+            },
+            "metadata": {
+              "api_url": "/browse"
+            },
+            "command": {
+              "type": "BrowseEndpoint"
+            }
+          }
+        },
+        "subtitle": "Beéle • 212 M de visualizaciones"
+      },
+      {
+        "kind": "video",
+        "title": "Piscina",
+        "author": {
+          "name": "Maria Becerra",
+          "channel_id": "UCyE23CF-5Be1FgN-VcFGg8A",
+          "endpoint": {
+            "type": "NavigationEndpoint",
+            "name": "browseEndpoint",
+            "payload": {
+              "browseId": "UCyE23CF-5Be1FgN-VcFGg8A",
+              "browseEndpointContextSupportedConfigs": {
+                "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                }
+              }
+            },
+            "metadata": {
+              "api_url": "/browse"
+            },
+            "command": {
+              "type": "BrowseEndpoint"
+            }
+          }
+        },
+        "subtitle": "Maria Becerra, Chencho Corleone y Ovy On The Drums • 218 M de visualizaciones"
+      },
+      {
+        "kind": "video",
+        "title": "เด๋อ - โจอี้ ภูวศิษฐ์ (JOEY PHUWASIT)「Official MV」",
+        "author": {
+          "name": "JOEY PHUWASIT",
+          "channel_id": "UCu6NHPS6IIGwLe4GyHBEGeA",
+          "endpoint": {
+            "type": "NavigationEndpoint",
+            "name": "browseEndpoint",
+            "payload": {
+              "browseId": "UCu6NHPS6IIGwLe4GyHBEGeA",
+              "browseEndpointContextSupportedConfigs": {
+                "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                }
+              }
+            },
+            "metadata": {
+              "api_url": "/browse"
+            },
+            "command": {
+              "type": "BrowseEndpoint"
+            }
+          }
+        },
+        "subtitle": "JOEY PHUWASIT • 1 M de visualizaciones"
+      }
+    ]
+  }
+]

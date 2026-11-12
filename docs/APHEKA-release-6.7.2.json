@@ -1,0 +1,23 @@
+﻿{
+    "product":  "APHEKA",
+    "version":  "6.7.2",
+    "identifier":  "com.owa.studio",
+    "file":  "apheka_FINAL.exe",
+    "bytes":  78225135,
+    "sha256":  "A98F19B169BC51F63B2EF2C721B7112A083A14EF9D54D84C5ABC31F6C1E35B76",
+    "modifiedAtUtc":  "2026-10-13T16:15:19.2593864Z",
+    "sourceLatestEditUtc":  "2026-10-13T16:05:26.2076127Z",
+    "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json",
+    "embeddedFrontendAssets":  [
+                                   "assets/index-CfLiBGsX.js",
+                                   "assets/charts-DQ4Dkqgr.js",
+                                   "assets/anim-DmwEpK7h.js",
+                                   "assets/tauri-BsR3o_Mj.js",
+                                   "assets/storage-Dmwemyxp.js",
+                                   "assets/audio-meta-CT9Hv6Ta.js",
+                                   "assets/date-DjBM7m5F.js",
+                                   "assets/index-B8uCnb2N.css"
+                               ],
+    "legacyUpgrade":  "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory":  "com.owa.studio (existing desktop data directory retained)"
+}

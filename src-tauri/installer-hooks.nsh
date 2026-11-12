@@ -10,13 +10,13 @@ SetFont "Segoe UI" 10
 !define MUI_INSTFILESPAGE_COLORS "252A2E F3F5F2"
 !define MUI_WELCOMEPAGE_TITLE "Tu espacio, a tu ritmo."
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_WELCOMEPAGE_TEXT "POHU ${VERSION} · Windows 64 bits$\r$\n$\r$\nEstudio, materiales, tareas y música, en un mismo espacio.$\r$\n$\r$\nIncluye Charvis con dictado local en español y una biblioteca musical más clara.$\r$\n$\r$\nTus notas, cursos, archivos y conversaciones se conservan.$\r$\n$\r$\nPulsa Continuar para revisar la instalación."
+!define MUI_WELCOMEPAGE_TEXT "POUH ${VERSION} · Windows 64 bits$\r$\n$\r$\nEstudio, materiales, tareas y música, en un mismo espacio.$\r$\n$\r$\nIncluye Charvis con dictado local en español y una biblioteca musical más clara.$\r$\n$\r$\nTus notas, cursos, archivos y conversaciones se conservan.$\r$\n$\r$\nPulsa Continuar para revisar la instalación."
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Elige la carpeta de la aplicación. Tus materiales y conversaciones permanecen en su ubicación habitual."
-!define MUI_INSTFILESPAGE_HEADER_TEXT "Preparando POHU"
+!define MUI_INSTFILESPAGE_HEADER_TEXT "Preparando POUH"
 !define MUI_INSTFILESPAGE_HEADER_SUBTEXT "Actualizando la aplicación y reutilizando los componentes ya verificados."
 !define MUI_FINISHPAGE_TITLE "Tu espacio está listo"
-!define MUI_FINISHPAGE_TEXT "POHU ${VERSION} ya está preparada.$\r$\n$\r$\nPuedes continuar con tus cursos, conversaciones y música. Los datos existentes permanecen en su carpeta habitual."
-!define MUI_FINISHPAGE_RUN_TEXT "Abrir POHU"
+!define MUI_FINISHPAGE_TEXT "POUH ${VERSION} ya está preparada.$\r$\n$\r$\nPuedes continuar con tus cursos, conversaciones y música. Los datos existentes permanecen en su carpeta habitual."
+!define MUI_FINISHPAGE_RUN_TEXT "Abrir POUH"
 Var AphekaWelcomeTitleFont
 
 !define MUI_CUSTOMFUNCTION_GUIINIT APHEKA_CAPTURE_HISTORY
@@ -35,6 +35,7 @@ Function APHEKA_CAPTURE_HISTORY
   ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA" "DisplayVersion"
   ${If} $0 != "APHEKA"
   ${AndIf} $0 != "POHU"
+  ${AndIf} $0 != "POUH"
   ${OrIf} $1 != "owa"
     ReadRegStr $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA" "DisplayName"
     ReadRegStr $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA" "Publisher"
@@ -42,6 +43,7 @@ Function APHEKA_CAPTURE_HISTORY
   ${EndIf}
   ${If} $0 == "APHEKA"
   ${OrIf} $0 == "POHU"
+  ${OrIf} $0 == "POUH"
     ${If} $1 == "owa"
     StrCpy $AphekaHadPrevious "true"
     StrCpy $AphekaPreviousName $0
@@ -91,7 +93,7 @@ FunctionEnd
       Delete "$2\uninstall.exe"
       RMDir "$2"
     ${Else}
-      MessageBox MB_ICONSTOP "Se encontró ${NAME}, pero su registro de instalación no es el esperado. Desinstala esa versión conservando los datos antes de instalar POHU."
+      MessageBox MB_ICONSTOP "Se encontró ${NAME}, pero su registro de instalación no es el esperado. Desinstala esa versión conservando los datos antes de instalar POUH."
       Abort
     ${EndIf}
   ${EndIf}
@@ -141,18 +143,24 @@ FunctionEnd
   !insertmacro APHEKA_REMOVE_MSI "{a33f82cd-8f77-5b20-8afd-9b5687e89143}" "OwA Project_Beta"
 !macroend
 
+!macro POUH_REMOVE_OWNED_SHORTCUT SHORTCUT
+  !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\${MAINBINARYNAME}.exe"
+  Pop $0
+  ${If} $0 != 1
+    !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\owa-studio.exe"
+    Pop $0
+  ${EndIf}
+  ${If} $0 == 1
+    Delete "${SHORTCUT}"
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_POSTINSTALL
-  ; Rename only installer-owned legacy shortcuts with an exact executable target.
-  !insertmacro IsShortcutTarget "$DESKTOP\APHEKA.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-  Pop $0
-  ${If} $0 == 1
-    Delete "$DESKTOP\APHEKA.lnk"
-  ${EndIf}
-  !insertmacro IsShortcutTarget "$SMPROGRAMS\APHEKA.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-  Pop $0
-  ${If} $0 == 1
-    Delete "$SMPROGRAMS\APHEKA.lnk"
-  ${EndIf}
+  ; Both known names may still target the former executable after a rename.
+  !insertmacro POUH_REMOVE_OWNED_SHORTCUT "$DESKTOP\APHEKA.lnk"
+  !insertmacro POUH_REMOVE_OWNED_SHORTCUT "$SMPROGRAMS\APHEKA.lnk"
+  !insertmacro POUH_REMOVE_OWNED_SHORTCUT "$DESKTOP\POHU.lnk"
+  !insertmacro POUH_REMOVE_OWNED_SHORTCUT "$SMPROGRAMS\POHU.lnk"
   ; Remove only the old installer-owned duplicate names, after canonical tools exist.
   ${If} ${FileExists} "$INSTDIR\bin\ffmpeg.exe"
     Delete "$INSTDIR\bin\ffmpeg-x86_64-pc-windows-msvc.exe"

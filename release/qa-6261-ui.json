@@ -1,0 +1,33 @@
+{
+  "focus": {
+    "outline": "none",
+    "shadow": "none",
+    "borderWidth": "0px"
+  },
+  "availability": {
+    "rightClickHides": true,
+    "disabledAfterReload": true,
+    "systemEnablesAndDisables": true
+  },
+  "eventWidths": [
+    {
+      "viewport": 1440,
+      "width": 500,
+      "overflow": false,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 768,
+      "width": 500,
+      "overflow": false,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 420,
+      "width": 388,
+      "overflow": false,
+      "bodyOverflow": false
+    }
+  ],
+  "errors": []
+}

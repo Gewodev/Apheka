@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {clockMinutes,clockFromMinutes,shiftClock,sessionTimingError} from '../src/lib/timeControl.ts';
+assert.equal(clockMinutes('00:00'),0);
+assert.equal(clockMinutes('23:59'),1439);
+assert.equal(clockMinutes('24:00'),null);
+assert.equal(clockMinutes('09:60'),null);
+assert.equal(shiftClock('09:45',15),'10:00');
+assert.equal(shiftClock('00:05',-15),'00:00');
+assert.equal(shiftClock('23:50',15),'23:59');
+assert.equal(clockFromMinutes(NaN),'00:00');
+assert.equal(sessionTimingError('2026-10-20','09:30',45),null);
+assert.ok(sessionTimingError('2026-02-30','09:30',45));
+assert.ok(sessionTimingError('2026-10-20','23:30',60));
+assert.equal(sessionTimingError('2026-10-20','23:30',30),null);
+assert.ok(sessionTimingError('2026-10-20','09:30',NaN));
+assert.ok(sessionTimingError('2026-10-20','09:30',45,'2026-10-19'));
+console.log('PASS 14 time control and session timing cases');

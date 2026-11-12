@@ -1,0 +1,32 @@
+[
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffmpeg-x86_64-pc-windows-msvc.exe",
+    "Bytes": 102856192,
+    "Sha256": "72A489ECCD008C2EC2C0A5856C5C75BC3D8BBFA90166C4566865C246445E6AA3"
+  },
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffmpeg.exe",
+    "Bytes": 102856192,
+    "Sha256": "72A489ECCD008C2EC2C0A5856C5C75BC3D8BBFA90166C4566865C246445E6AA3"
+  },
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffprobe-x86_64-pc-windows-msvc.exe",
+    "Bytes": 102652416,
+    "Sha256": "19202B23C0043F15AD1B7BCE2344F406FD52BD6EFD8F995CE02E7392A1CEC52F"
+  },
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\ffprobe.exe",
+    "Bytes": 102652416,
+    "Sha256": "19202B23C0043F15AD1B7BCE2344F406FD52BD6EFD8F995CE02E7392A1CEC52F"
+  },
+  {
+    "Path": "D:\\VIBE\\Owa_Studio\\src-tauri\\bin\\yt-dlp-x86_64-pc-windows-msvc.exe",
+    "Bytes": 17840399,
+    "Sha256": "66674953FE251B89F4D08C5F0E35E0728679BD67AB3D7D05C0562AF101DD3E7A"
+  },
+  {
+    "Path": "C:\\Users\\USER\\AppData\\Roaming\\com.owa.studio\\bin\\yt-dlp.exe",
+    "Bytes": 17840399,
+    "Sha256": "66674953FE251B89F4D08C5F0E35E0728679BD67AB3D7D05C0562AF101DD3E7A"
+  }
+]

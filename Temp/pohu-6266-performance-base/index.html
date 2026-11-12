@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es" style="background-color: #0a0a0f; color-scheme: dark;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" type="image/png" href="/owa_logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/owa_logo.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/owa_logo.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/owa_logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APHEKA</title>
+    <meta name="description" content="Tu espacio de estudio definitivo. APHEKA - Productividad académica." />
+    <style>
+      /* Critical styles to prevent white flash */
+      html, body {
+        background-color: #0a0a0f;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      #root:empty {
+        background-color: #0a0a0f;
+      }
+    </style>
+    <script>
+      // Error logging to catch crashes (non-intrusive)
+      window._owaErrorShown = false;
+      window.onerror = function(msg, url, line, col, error) {
+        if (window._owaErrorShown) return;
+        window._owaErrorShown = true;
+        try {
+          const errDiv = document.createElement('div');
+          errDiv.id = 'owa-error-overlay';
+          errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#020203;color:#ef4444;padding:20px;z-index:9999;font-family:monospace;font-size:14px;';
+          errDiv.innerHTML = '<h1 style="color:#ef4444;margin:0 0 12px 0">Error</h1><p style="margin:0">' + msg + '</p>';
+          document.body.appendChild(errDiv);
+        } catch(e) {}
+      };
+
+      // Early theme application to prevent flash (FOUC)
+      (function() {
+        try {
+          const isFloating = window.location.hash === '#floating-timer' || window.__OWA_IS_FLOATING === true;
+          if (isFloating) {
+            // Floating timer window: ALWAYS dark, never white
+            document.documentElement.style.backgroundColor = '#020203';
+            document.documentElement.style.colorScheme = 'dark';
+            document.body.style.backgroundColor = '#020203';
+            document.documentElement.setAttribute('data-theme', 'oscuro');
+            return;
+          }
+          const config = JSON.parse(localStorage.getItem('owa_studio_data') || 'null');
+          const theme = config?.settings?.theme || 'oscuro';
+          const isDark = theme === 'oscuro' || theme === 'vibrante' || (theme === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
+          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+          if (isDark) document.documentElement.classList.add('dark');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'oscuro');
+          document.documentElement.style.colorScheme = 'dark';
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-ESh0ZWEV.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/charts-DKJleKn1.js">
+    <link rel="modulepreload" crossorigin href="/assets/anim-jyow7flR.js">
+    <link rel="modulepreload" crossorigin href="/assets/tauri-CWEvInMW.js">
+    <link rel="modulepreload" crossorigin href="/assets/storage-DwnyWBFG.js">
+    <link rel="modulepreload" crossorigin href="/assets/audio-meta-CT9Hv6Ta.js">
+    <link rel="modulepreload" crossorigin href="/assets/date-COeAPjBE.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BhF-qus_.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

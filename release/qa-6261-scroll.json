@@ -1,0 +1,80 @@
+{
+  "report": [
+    {
+      "view": "tareas",
+      "samples": [
+        {
+          "target": "page-container task-workspace flex flex-col h-full overflow-y-auto custom-scroll",
+          "range": 11476,
+          "moved": 11476,
+          "frames": 60,
+          "p95ms": 31,
+          "maxFrameMs": 43,
+          "longTasks": []
+        }
+      ]
+    },
+    {
+      "view": "detalle tarea",
+      "samples": [
+        {
+          "target": "page-container task-workspace flex flex-col h-full overflow-y-auto custom-scroll",
+          "range": 11476,
+          "moved": 11476,
+          "frames": 60,
+          "p95ms": 10.9,
+          "maxFrameMs": 13,
+          "longTasks": []
+        },
+        {
+          "target": "task-inspector-content custom-scroll",
+          "range": 126,
+          "moved": 126,
+          "frames": 60,
+          "p95ms": 10.1,
+          "maxFrameMs": 17,
+          "longTasks": []
+        }
+      ]
+    },
+    {
+      "view": "notas",
+      "samples": [
+        {
+          "target": "notes-card-grid",
+          "range": 2265,
+          "moved": 2265,
+          "frames": 60,
+          "p95ms": 7.9,
+          "maxFrameMs": 12,
+          "longTasks": []
+        }
+      ]
+    },
+    {
+      "view": "nuevo evento",
+      "samples": [
+        {
+          "target": "",
+          "range": 1044,
+          "moved": 1044,
+          "frames": 60,
+          "p95ms": 11,
+          "maxFrameMs": 17,
+          "longTasks": []
+        },
+        {
+          "target": "event-form-body",
+          "range": 355,
+          "moved": 355,
+          "frames": 60,
+          "p95ms": 7.4,
+          "maxFrameMs": 131,
+          "longTasks": []
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "background": "Native release compilation was running; this is a bounded interaction sample, not a hardware benchmark."
+}

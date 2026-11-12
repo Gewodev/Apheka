@@ -1,0 +1,85 @@
+{
+  "product": "APHEKA",
+  "version": "6.7.3",
+  "verifiedAtUtc": "2026-10-23T01:27:55.592Z",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.7.3",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 78369794,
+    "sha256": "D0090C60873E363E9A8EAEA4EC73C490985CB49F97E23073DFCD7C1C71BBF93D",
+    "modifiedAtUtc": "2026-10-23T01:23:18.0910463Z",
+    "sourceLatestEditUtc": "2026-10-23T00:58:55.9119648Z",
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json",
+    "embeddedFrontendAssets": [
+      "assets/index-BA6L_OVm.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-q-J-1TGw.js",
+      "assets/storage-Dmwemyxp.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-DjBM7m5F.js",
+      "assets/index-CIGaVnFV.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "validation": {
+    "frontendBuild": "passed",
+    "rustTests": 14,
+    "pureLogicAssertions": 105,
+    "productionViews": 8,
+    "settingsCategories": 6,
+    "layoutWidths": [
+      900,
+      1024,
+      1200,
+      1440
+    ],
+    "sidebarOpenAndClosed": "passed",
+    "mcpTools": 16,
+    "mcpDomains": 15,
+    "mcpCrudAndPersistence": "passed",
+    "taskCountersUnderStrictMode": "passed",
+    "courseColorsAndDependentSessionRemoval": "passed",
+    "noteOpenEditorSyncAndParallelRequests": "passed",
+    "destructiveActionConfirmationAndCancellation": "passed",
+    "nativeHttpProtocolAndAuthFixtures": "passed",
+    "packagedStdioExecutable": "passed",
+    "fullscreenNativeApiSimulationAndPointerEvents": "passed",
+    "installerIdentityAssetsAndSha256": "passed"
+  },
+  "limitations": {
+    "chatgptAccountTunnel": "not configured or linked to a real account",
+    "newNativeWindowRecheck": "interrupted; not counted as completed",
+    "intermittentNativeCursorFreeze": "not reproduced; mitigations and regression checks included",
+    "personalInstallationMigration": "installer not executed against personal data",
+    "buildWarnings": [
+      "Existing large Cursos chunk",
+      "Existing file-type dependency eval warning",
+      "Existing mixed static/dynamic browsers import"
+    ]
+  },
+  "sourceSha256": {
+    "src/App.tsx": "21BBE21D86D33BE1A0FC880DEB6DA7832AB0133482F178C2E7BAB594255DFA0C",
+    "src/store/AppContext.tsx": "058901EA753EF27FA6F518A8B093DEC75540F63C1C2A00F2F99F1F1C5A3CFFD4",
+    "src/lib/fullscreen.ts": "2B6016EB410BD5FC2B20F98136922E2B954DB6FFEDDDE6C0A2347CEDAA758B3C",
+    "src/hooks/useWindowFullscreen.ts": "200CFB16CC4340D4AF2B8EF799B84DCB2A750BDA0AC609ADDF0CA94423870E62",
+    "src/components/VideoPiP.tsx": "2D869BDB9151F75DFFC2C523A074EFCC6511820F83F5F33090E0B51840779C48",
+    "src/components/GlobalPlayer.tsx": "A2BD50A900ECA676432EDCEC3BA567A8C9125C727A41587B79BEF0D2AEEA9A70",
+    "src/components/McpBridge.tsx": "21C4B3C82CE981BC656159237C440FFF454A37099D04E17A9294FA648B5B8DC8",
+    "src/components/ui/McpSettings.tsx": "82FFD54DBFAC58778A015CF61E01ADCBF755D956D3C8FCA20634D82DDAAF71BF",
+    "src/components/ui/mcp.css": "9CC7018B9769B3C3EA994D078A8C6FAF43612C3F51CD0546D6248A91C12D0220",
+    "src/lib/mcpActions.ts": "F0F60B285206213386B5D548956D26A1E43127DCAA5F27520533A68C3723FF7A",
+    "src/lib/mcpCatalog.ts": "D531028D50D13A0535DF78C2EE8342F38C366C2296BB7791ED01E9BC6B323233",
+    "src/lib/mcpActivity.ts": "C5C1C93578CF3B1BE863A570EBB13C7B90D7A1B50CF1E2F343B573997F5534D1",
+    "src/lib/editorHtml.ts": "DF6E3F5043F72E12BE832873E1AB0B407D38018E832BDC0CDF1880E0C8277995",
+    "src/components/views/Notas.tsx": "EC1F791D97F6C91BFF2BD5A9BB1C1BD1A4F5319DB1D06250DFD35380E5549DDD",
+    "src/components/views/Cursos.tsx": "982502C72D82B150E31E5D18E8C7D56AFC48FBB40777D8759E712340EAB8D639",
+    "src-tauri/src/main.rs": "C3B8FDAFE24F03EBEC3D95A0016D82B16DE441DCE9BBBC27790433549660BDDF",
+    "src-tauri/src/mcp.rs": "3EDF4FB2AF900869A87BAFE51BC1E1E25BC0FA040289561314D6610C27F801ED",
+    "src-tauri/capabilities/default.json": "3922F51D51B54B28C3D324E2FBDF368B9CC37A8B872AF6AAA6DA432F96C694D6",
+    "src-tauri/tauri.conf.json": "E5C7056E6EA26818F423B4B19E8A07DE7BA1563C9B983A7314D1DC718A86C605"
+  }
+}

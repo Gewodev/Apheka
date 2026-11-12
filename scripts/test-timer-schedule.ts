@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {deadlineForClock,remainingToDeadline} from '../src/lib/timerSchedule.ts';
+const now=new Date('2026-10-12T14:00:30');
+assert.equal(deadlineForClock('14:15',now).seconds,870);
+assert.equal(deadlineForClock('14:01',now).seconds,30);
+assert.equal(deadlineForClock('14:00',now).deadline,null);
+assert.equal(deadlineForClock('16:01',now).deadline,null);
+assert.equal(deadlineForClock('25:00',now).deadline,null);
+assert.equal(deadlineForClock('bad',now).deadline,null);
+assert.equal(remainingToDeadline(deadlineForClock('14:15',now).deadline!,new Date('2026-10-12T14:02:30').getTime()),750);
+assert.equal(remainingToDeadline(now.getTime(),now.getTime()+1000),0);
+assert.equal(remainingToDeadline(NaN),0);
+console.log('PASS 9 exact clock scheduling cases');

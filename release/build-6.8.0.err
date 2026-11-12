@@ -1,0 +1,24 @@
+$ tauri "build" "--config" "src-tauri/tauri.prod.conf.json" "--bundles" "nsis"
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `pnpm run build`
+$ tsc && vite build
+Generated an empty chunk: "react-vendor".
+Generated an empty chunk: "markdown".
+node_modules/.pnpm/file-type@16.5.4/node_modules/file-type/core.js (1419:16): Use of eval in "node_modules/.pnpm/file-type@16.5.4/node_modules/file-type/core.js" is strongly discouraged as it poses security risks and may cause issues with minification.
+[plugin vite:reporter] 
+(!) D:/VIBE/Owa_Studio/src/lib/browsers.ts is dynamically imported by D:/VIBE/Owa_Studio/src/components/ui/MaterialContextMenu.tsx, D:/VIBE/Owa_Studio/src/components/ui/MaterialContextMenu.tsx, D:/VIBE/Owa_Studio/src/components/views/Cursos.tsx, D:/VIBE/Owa_Studio/src/components/views/Cursos.tsx but also statically imported by D:/VIBE/Owa_Studio/src/components/ui/MaterialContextMenu.tsx, dynamic import will not move module into another chunk.
+
+
+(!) Some chunks are larger than 1000 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+   Compiling owa-studio v6.8.0 (D:\VIBE\Owa_Studio\src-tauri)
+    Finished `release` profile [optimized] target(s) in 6m 45s
+       Built application at: D:\VIBE\Owa_Studio\src-tauri\target\release\owa-studio.exe
+        Info Patching D:\VIBE\Owa_Studio\src-tauri\target\release\owa-studio.exe with bundle type information: nsis
+        Info Target: x64
+     Running makensis to produce D:\VIBE\Owa_Studio\src-tauri\target\release\bundle\nsis\APHEKA_6.8.0_x64-setup.exe
+    Finished 1 bundle at:
+        D:\VIBE\Owa_Studio\src-tauri\target\release\bundle\nsis\APHEKA_6.8.0_x64-setup.exe
+
