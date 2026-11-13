@@ -1,0 +1,11 @@
+{
+  "steps": [
+    "native flyout receives the song that is really loaded",
+    "queue and playlist survive a restart without being emptied",
+    "native flyout is coherent again after the restart",
+    "changing the song updates the flyout with the new one",
+    "the cover travels only when it changes"
+  ],
+  "skipped": [],
+  "errors": []
+}

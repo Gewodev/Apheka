@@ -1,0 +1,18 @@
+{
+  "steps": [
+    "course notes mosaic has no redundant reader button",
+    "course note opens from the card itself",
+    "habit reminder has no activation control",
+    "water and exercise modes register amounts",
+    "downloads paste field is readable and never compressed",
+    "spotify token copy explains a private list without manual wording",
+    "repeat one is selectable and stays active",
+    "artist profile offers editing and verified featured songs",
+    "artist can be renamed and songs can be removed",
+    "removed song can be restored from the artist editor"
+  ],
+  "skipped": [
+    "downloads list is analysed and each song can be downloaded alone :: locator.waitFor: Timeout 25000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.music-import-analysis') to be visible\u001b[22m\n"
+  ],
+  "errors": []
+}

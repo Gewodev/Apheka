@@ -13,7 +13,7 @@ export default function AppearanceStudio() {
     useEffect(() => { const observer = new MutationObserver(() => setPaletteState(document.documentElement.dataset.paletteState || 'idle')); observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-palette-state'] }); return () => observer.disconnect(); }, []);
     const pickImage = async () => { try {
         if (isTauri()) {
-            const path = await open({ multiple: false, title: 'Elegir fondo de POUH', filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'avif'] }] });
+            const path = await open({ multiple: false, title: 'Elegir fondo de APHEKA', filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'avif'] }] });
             if (typeof path === 'string')
                 updateSettings({ backgroundImage: convertFileSrc(path), backgroundImagePath: path, appearanceMode: 'image', paletteImageKey: undefined });
         }

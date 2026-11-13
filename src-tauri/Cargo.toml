@@ -1,7 +1,7 @@
 [package]
 name = "owa-studio"
-version = "6.26.7"
-description = "POUH - Tu espacio de estudio"
+version = "6.27.0"
+description = "APHEKA - Tu espacio de estudio"
 authors = ["Gewodev"]
 edition = "2021"
 

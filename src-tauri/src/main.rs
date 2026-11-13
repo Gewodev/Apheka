@@ -17,6 +17,7 @@ mod external_open;
 mod workspace_pointer;
 mod floating_timer;
 mod media_controls;
+mod app_update;
 mod rendering;
 mod release_notice;
 mod mcp;
@@ -129,7 +130,7 @@ async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String>
     let client = reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(10)).timeout(std::time::Duration::from_secs(180)).build().map_err(|e|e.to_string())?;
     let release = client
         .get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
-        .header("User-Agent", "POUH")
+        .header("User-Agent", "APHEKA")
         .send()
         .await
         .map_err(|e| format!("Error consultando release de yt-dlp: {e}"))?
@@ -148,7 +149,7 @@ async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String>
 
     let mut resp = client
         .get(download_url)
-        .header("User-Agent", "POUH")
+        .header("User-Agent", "APHEKA")
         .send()
         .await
         .map_err(|e| format!("Error descargando yt-dlp: {e}"))?
@@ -843,8 +844,10 @@ fn main() {
             detect_installed_browsers,
             open_url_in_browser,
             workspace_pointer::restore_workspace_pointer,
+            workspace_pointer::refresh_workspace_cursor,
             floating_timer::toggle_floating_timer, floating_timer::close_floating_timer,
             media_controls::media_controls_update, media_controls::media_controls_clear,
+            app_update::update_state, app_update::relaunch_app,
             rendering::graphics_status, rendering::graphics_set_mode,
             download_yt_dlp,
         ])

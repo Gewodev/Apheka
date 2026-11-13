@@ -7,6 +7,7 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {isTauri} from '@tauri-apps/api/core';
 import {getDownloadPath,cancelDownload} from '../../lib/musicApi';
 import toast from 'react-hot-toast';
+import './music-downloads.css';
 type DownloadRow={id:string;kind:string;title:string;artist?:string;cover?:string;pending:boolean;complete:boolean;cancelling?:boolean;message:string;progress?:number;createdAt:number;cancel:()=>void|Promise<void>;retry:()=>void};
 export default function MusicDownloads(){
  const jobs=useSyncExternalStore(catalogDownloads.subscribe,catalogDownloads.snapshot),a=useAppSlice(['settings','updateSettings','downloadPath','setDownloadPathCtx','downloadQueue','updateDownloadStatus','addToDownloadQueue','clearCompletedDownloads']);

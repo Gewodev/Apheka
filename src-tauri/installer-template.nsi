@@ -77,8 +77,8 @@ Var WixMode
 Var OldMainBinaryName
 
 Name "${PRODUCTNAME}"
-BrandingText "POUH ${VERSION} · Gewodev"
-Caption "POUH ${VERSION} · Instalar y actualizar"
+BrandingText "APHEKA ${VERSION} · Gewodev"
+Caption "APHEKA ${VERSION} · Instalar y actualizar"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -89,7 +89,7 @@ InstallDir "${PLACEHOLDER_INSTALL_DIR}"
 
 VIProductVersion "${VERSIONWITHBUILD}"
 VIAddVersionKey "ProductName" "${PRODUCTNAME}"
-VIAddVersionKey "FileDescription" "POUH · Instalador de escritorio"
+VIAddVersionKey "FileDescription" "APHEKA · Instalador de escritorio"
 VIAddVersionKey "Comments" "Estudio, organización y Charvis en un solo espacio."
 VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"

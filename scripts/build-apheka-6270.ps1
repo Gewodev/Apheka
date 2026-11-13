@@ -1,0 +1,18 @@
+param([switch]$VerifyOnly)
+$ErrorActionPreference='Stop'
+$taskRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$version=(Get-Content -LiteralPath (Join-Path $taskRoot 'src-tauri/tauri.conf.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
+$taskLog=Join-Path $taskRoot "release/build-$version.log"
+$taskStatus=Join-Path $taskRoot "release/build-$version.status.json"
+$taskStart=[DateTime]::UtcNow.ToString('o')
+@{startedAtUtc=$taskStart;processId=$PID;state='running';mode=$(if($VerifyOnly){'verify_existing_bundle'}else{'build'});version=$version}|ConvertTo-Json|Set-Content -LiteralPath $taskStatus -Encoding UTF8
+$taskResult=0
+try {
+  if($VerifyOnly){& (Join-Path $PSScriptRoot 'package-final.ps1')}
+  else{& (Join-Path $PSScriptRoot 'package-final.ps1') -Build}
+} catch {
+  $taskResult=1
+  Write-Output "Build failed: $($_.Exception.Message)"
+}
+@{startedAtUtc=$taskStart;finishedAtUtc=[DateTime]::UtcNow.ToString('o');processId=$PID;state=$(if($taskResult -eq 0){'complete'}else{'failed'});exitCode=$taskResult;mode=$(if($VerifyOnly){'verify_existing_bundle'}else{'build'});version=$version}|ConvertTo-Json|Set-Content -LiteralPath $taskStatus -Encoding UTF8
+exit $taskResult

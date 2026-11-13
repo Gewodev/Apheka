@@ -1,0 +1,55 @@
+{
+  "product": "APHEKA",
+  "version": "6.27.0",
+  "identifier": "com.owa.studio",
+  "file": "release/apheka_FINAL.exe",
+  "bytes": 115485571,
+  "sha256": "EB04CC3890F81FEF1521E5CE6DF5006E12B3B2404B7B724D138623E4A47CB14E",
+  "modifiedAtUtc": "2026-11-13T00:16:10.5547336Z",
+  "sourceLatestEditUtc": "2026-11-13T00:05:45.4145487Z",
+  "manifestRewrittenBeforeFrontend": false,
+  "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+  "embeddedFrontendAssets": [
+    "assets/index-vlsd3Ywt.js",
+    "assets/charts-DKJleKn1.js",
+    "assets/anim-jyow7flR.js",
+    "assets/tauri-DydacIQc.js",
+    "assets/storage-DwnyWBFG.js",
+    "assets/audio-meta-CT9Hv6Ta.js",
+    "assets/date-COeAPjBE.js",
+    "assets/index-B250136V.css"
+  ],
+  "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+  "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
+  "build": {
+    "mode": "build",
+    "startedAtUtc": "2026-11-13T00:05:44.8672120Z",
+    "finishedAtUtc": "2026-11-13T00:16:14.0487021Z",
+    "state": "complete",
+    "exitCode": 0,
+    "frontendSeconds": 34.35,
+    "rustReleaseSeconds": 356
+  },
+  "qaReports": [
+    "qa-6270-ui.json",
+    "qa-6270-media.json",
+    "qa-6270-update.json",
+    "qa-6270-apuntes.png",
+    "qa-6270-artistas.png",
+    "qa-6270-habitos.png",
+    "qa-6270-habitos-agua.png",
+    "qa-6270-descargas.png",
+    "qa-6270-descargas-spotify.png",
+    "qa-6270-repeticion.png",
+    "qa-6270-actualizacion.png"
+  ],
+  "nativeTests": {
+    "passed": 48,
+    "failed": 0,
+    "ignored": 2
+  },
+  "typecheck": "tsc --noEmit clean",
+  "cursorValidation": "Root cause corrected (default graphics profile back to Compatible) plus a native WM_SETCURSOR refresh while fullscreen. Physical cursor check on the user's hardware not performed in this revision.",
+  "mediaControlsValidation": "Native flyout payload and restart continuity verified with a simulated desktop bridge; the physical Windows flyout and hardware media keys were not exercised.",
+  "installations": "No personal installation was replaced and nothing was pushed."
+}

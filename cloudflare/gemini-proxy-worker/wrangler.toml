@@ -1,0 +1,14 @@
+name = "opencode-proxy"
+main = "index.js"
+compatibility_date = "2025-07-31"
+
+# NO pongas secretos aquí. Créalos con:
+#   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler secret put PROXY_TOKEN
+#
+# GEMINI_API_KEY = clave de Google AI Studio (AIza... o AQ...)
+# PROXY_TOKEN    = token que Claude Code envía en Authorization: Bearer <PROXY_TOKEN>
+#
+# Opcionales (puedes añadirlos como [vars] si los necesitas):
+# HTTP_REFERER = "https://claude.ai"
+# X_TITLE = "Claude Code + Gemini"

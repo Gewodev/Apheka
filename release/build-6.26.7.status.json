@@ -1,8 +1,8 @@
 ﻿{
-    "exitCode":  1,
-    "startedAtUtc":  "2026-11-12T01:43:18.6768314Z",
-    "processId":  7340,
-    "finishedAtUtc":  "2026-11-12T01:43:23.7412810Z",
-    "state":  "failed",
+    "exitCode":  0,
+    "startedAtUtc":  "2026-11-12T15:14:38.0811793Z",
+    "processId":  37212,
+    "finishedAtUtc":  "2026-11-12T15:28:01.4150008Z",
+    "state":  "complete",
     "mode":  "build"
 }

@@ -4070,9 +4070,6 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                         <div className="course-note-meta">
                                           {isHighlighted && <Star size={12} aria-label="Destacado" fill="currentColor"/>}
                                           {showOverviewNoteDates && <time dateTime={n.createdAt}>{format(new Date(n.createdAt), 'dd MMM yyyy', {locale: es})}</time>}
-                                          <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setSelectedOverviewNoteId(n.id);setOverviewNoteEditMode(false);}}>
-                                            Leer apunte <ChevronRight size={13}/>
-                                          </button>
                                         </div>
                                       </>
                                     )}
@@ -6424,7 +6421,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   ) : (
                     /* -- IMPORT -- */
                     <div>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde POUH.</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde APHEKA.</p>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: 8, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, transition: 'all 200ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.color = course.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>

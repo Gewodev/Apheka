@@ -1,9 +1,10 @@
 import {useAppSlice} from "../../store/AppContext";
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Bell,X,Info,CheckCircle,AlertCircle} from 'lucide-react';
+import {Bell,X,Info,CheckCircle,AlertCircle,Download,RefreshCw} from 'lucide-react';
 import {format} from 'date-fns';
 import {useApp,fmtClock} from '../../store/AppContext';
+import {relaunchApp} from '../../lib/appUpdate';
 
 export default function NotificationBell(){
  const {notifications,removeNotification,clearNotifications,settings}=useAppSlice(["notifications","removeNotification","clearNotifications","settings"]);
@@ -22,11 +23,16 @@ export default function NotificationBell(){
   document.addEventListener('pointerdown',close);document.addEventListener('keydown',key);
   return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',key);};
  },[open]);
+ const runAction=async(action:{label:string;kind:'relaunch'|'open-url';url?:string})=>{
+  if(action.kind==='relaunch'){await relaunchApp();return;}
+  const url=action.url;if(!url)return;
+  try{const {openUrl}=await import('@tauri-apps/plugin-opener');await openUrl(url);}catch{try{window.open(url,'_blank','noopener');}catch{/* the browser refused to open it */}}
+ };
  const icons={success:<CheckCircle size={16}/>,error:<AlertCircle size={16}/>,info:<Info size={16}/>};
  return <><button ref={trigger} className="notification-trigger" aria-label="Notificaciones" aria-expanded={open} aria-controls="notification-panel" onClick={()=>setOpen(!open)}><Bell size={17}/>{notifications.length>0&&<span>{notifications.length>9?'9+':notifications.length}</span>}</button>
  {open&&createPortal(<div ref={panel} id="notification-panel" role="dialog" aria-label="Notificaciones" className="notification-panel" style={position}>
   <div className="notification-panel-header"><h2>Notificaciones</h2><div>{notifications.length>0&&<button onClick={clearNotifications}>Limpiar</button>}<button aria-label="Cerrar notificaciones" onClick={()=>setOpen(false)}><X size={16}/></button></div></div>
   <div className="notification-list">{notifications.length===0?<p className="notification-empty">No tienes avisos pendientes.</p>:[...notifications].reverse().map(n=><article key={n.id} className={`notification-item notification-${n.type}`}>
-   <span aria-hidden="true">{icons[n.type as keyof typeof icons]||icons.info}</span><div><p>{n.message}</p><time>{(()=>{try{return fmtClock(format(new Date(n.timestamp),'HH:mm'),settings.timeFormat)}catch{return '—'}})()}</time></div><button aria-label={`Eliminar aviso: ${n.message}`} onClick={()=>removeNotification(n.id)}><X size={14}/></button>
+   <span aria-hidden="true">{icons[n.type as keyof typeof icons]||icons.info}</span><div><p>{n.message}</p>{n.action&&<button className="notification-action" onClick={()=>void runAction(n.action!)}>{n.action.kind==='relaunch'?<RefreshCw size={13}/>:<Download size={13}/>}<span>{n.action.label}</span></button>}<time>{(()=>{try{return fmtClock(format(new Date(n.timestamp),'HH:mm'),settings.timeFormat)}catch{return '—'}})()}</time></div><button aria-label={`Eliminar aviso: ${n.message}`} onClick={()=>removeNotification(n.id)}><X size={14}/></button>
   </article>)}</div></div>,document.body)}</>;
 }

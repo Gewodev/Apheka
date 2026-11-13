@@ -511,6 +511,9 @@
 .notification-item > div {min-width:0;flex:1;}
 .notification-item p {font:400 13px/1.5 var(--font-primary);color:var(--text-primary);margin:0;overflow-wrap:anywhere;}
 .notification-item time {font:400 11px var(--font-mono);color:var(--text-tertiary);display:block;margin-top:6px;}
+.notification-action {display:inline-flex;align-items:center;gap:6px;margin-top:9px;padding:5px 11px;border:1px solid color-mix(in srgb,var(--accent) 38%,transparent)!important;border-radius:6px!important;background:color-mix(in srgb,var(--accent) 10%,transparent)!important;color:var(--accent)!important;font:500 11.5px var(--font-primary)!important;cursor:pointer;}
+.notification-action:hover {background:color-mix(in srgb,var(--accent) 18%,transparent)!important;border-color:color-mix(in srgb,var(--accent) 55%,transparent)!important;color:var(--accent)!important;}
+.notification-action span {white-space:nowrap;}
 .pomodoro-wall-clock {padding:16px 20px 0;}
 .pomodoro-wall-clock svg {display:block;width:174px;height:174px;margin:0 auto;touch-action:none;}
 .pomodoro-clock-hand {cursor:grab;outline:none;}

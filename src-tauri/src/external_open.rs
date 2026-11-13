@@ -5,7 +5,7 @@ pub fn target(value: &str) -> Result<String, String> {
     if let Ok(url) = tauri::Url::parse(value) {
         if matches!(url.scheme(), "http" | "https") {
             if url.host_str() == Some("asset.localhost") {
-                return Err("Una URL interna no puede abrirse fuera de POUH".into());
+                return Err("Una URL interna no puede abrirse fuera de APHEKA".into());
             }
             return Ok(url.to_string());
         }
@@ -36,7 +36,7 @@ mod tests {
         assert_eq!(target("https://example.com/doc.pdf?q=1").unwrap(), "https://example.com/doc.pdf?q=1");
     }
     #[test] fn real_pdf_path_is_one_unchanged_argument() {
-        let path = std::env::temp_dir().join(format!("POUH á espacios # {}.pdf", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("APHEKA á espacios # {}.pdf", uuid::Uuid::new_v4()));
         std::fs::write(&path, b"%PDF-1.4").unwrap();
         assert_eq!(target(path.to_str().unwrap()).unwrap(), path.to_string_lossy());
         let url = tauri::Url::from_file_path(&path).unwrap();

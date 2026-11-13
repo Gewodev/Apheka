@@ -475,6 +475,8 @@ export interface AppNotification {
   message: string;
   type: 'success' | 'error' | 'info';
   timestamp: number;
+  /** Optional action offered by the notification, such as updating the app. */
+  action?: { label: string; kind: 'relaunch' | 'open-url'; url?: string };
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -590,7 +592,7 @@ export interface AppContextType extends AppState {
   exportMusicLibrary: (destDir: string) => Promise<number>;
   importMusicLibrary: (srcDir: string) => Promise<number>;
   addArtist: (name: string, profileImage?: string, catalogId?:string) => void;
-  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'>>) => void;
+  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'|'excludedTrackIds'>>) => void;
   deleteArtist: (id: string) => void;
   playlists: Playlist[];
   addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
@@ -706,7 +708,7 @@ export interface AppContextType extends AppState {
   createStudyQuiz: (courseName: string, topics: string[]) => Promise<string | null>;
   initFirebaseNotifications: () => Promise<string | null>;
   notifications: AppNotification[];
-  addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
+  addNotification: (message: string, type?: 'success' | 'error' | 'info', action?: AppNotification['action']) => void;
   clearNotifications: () => void;
   removeNotification: (id: string) => void;
   toastMessage: { message: string; type: 'success' | 'error' | 'info' } | null;
@@ -914,9 +916,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [toastMessage, setToastMessage] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info', action?: AppNotification['action']) => {
     const id = Date.now().toString();
-    setNotifications(prev => [...prev.slice(-49), { id, message, type, timestamp: Date.now() }]);
+    setNotifications(prev => [...prev.slice(-49), { id, message, type, timestamp: Date.now(), ...(action ? { action } : {}) }]);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage({ message, type });
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
@@ -925,7 +927,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
   const clearNotifications = useCallback(() => setNotifications([]), []);
-  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+
+  // Update notices: the app announces a newer build in the notification panel.
+  // The check is local, throttled and never blocks the workspace.
+  const updateNotifiedRef = useRef('');
+  const updateCheckAtRef = useRef(0);
+  const [appVersion, setAppVersion] = useState('');
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const {getVersion} = await import('@tauri-apps/api/app');
+        const value = await getVersion();
+        if (!cancelled) setAppVersion(value);
+      } catch { /* the version stays unknown and no notice is shown */ }
+    })();
+    return () => { cancelled = true; };
+  }, [hydrated]);
+  useEffect(() => {
+    if (!hydrated || !appVersion) return;
+    let cancelled = false;
+    const run = async (force = false) => {
+      if (!force && Date.now() - updateCheckAtRef.current < 5 * 60 * 1000) return;
+      updateCheckAtRef.current = Date.now();
+      const {checkAppUpdate} = await import('../lib/appUpdate');
+      const finding = await checkAppUpdate(appVersion);
+      if (cancelled || !finding || updateNotifiedRef.current === finding.version) return;
+      updateNotifiedRef.current = finding.version;
+      addNotification(finding.message, 'info', finding.action);
+    };
+    void run(true);
+    const timer = setInterval(() => { void run(); }, 6 * 60 * 60 * 1000);
+    // Coming back to the window is the moment when a new installer may have run.
+    const focus = () => { void run(); };
+    window.addEventListener('focus', focus);
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener('focus', focus); };
+  }, [hydrated, appVersion, addNotification]);  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
   const [trackHistory, setTrackHistory] = useState<string[]>([]);
   const [musicTraversal,setMusicTraversal]=useState<MusicTraversal>({back:[],forward:[]});
   const musicTraversalRef=useRef(musicTraversal);
@@ -941,7 +979,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [playCounts]);
    const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
     _setRepeatMode(mode);repeatModeRef.current=mode;
-    repeatOnePlayedRef.current = false;
 
   }, []);
   // Shuffle utility (Fisher-Yates)
@@ -1034,7 +1071,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const playTrackRef = useRef<(id: string, preserveQueue?: boolean,direction?:MusicTravel) => void>(() => {});
    const trackHistoryRef = useRef(trackHistory);
    const playCountsRef = useRef(playCounts);
-   const repeatOnePlayedRef = useRef(false);
   const musicVolumeRef = useRef(musicVolume);
    const autoPlayRef = useRef(false);
    const activePlaySessionIdRef = useRef<string | null>(null);
@@ -1048,6 +1084,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const intentionalPauseRef = useRef(false);
   const fadeRampRef = useRef<number | null>(null);
   const restoreSeekRef = useRef<number | null>(null);
+  // Duration known from the previous session: it is kept until the real
+  // media reports its own, so the timeline and the native flyout stay
+  // coherent right after a restart.
+  const restoreDurationRef = useRef<number | null>(null);
+  // Any real duration (local metadata or the online player) closes the
+  // restored one, so a later track never inherits a stale length.
+  const setMusicDurationCb = useCallback((value: number) => {
+    if (value > 0) restoreDurationRef.current = null;
+    setMusicDuration(value);
+  }, []);
   
   useLayoutEffect(() => { currentTrackIdRef.current = currentTrackId; }, [currentTrackId]);
   useEffect(() => { trackHistoryRef.current = trackHistory; }, [trackHistory]);
@@ -1074,7 +1120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useEffect(() => { musicVolumeRef.current = musicVolume; }, [musicVolume]);
   useLayoutEffect(() => { isPlayingMusicRef.current = isPlayingMusic; }, [isPlayingMusic]);
   useEffect(() => { currentTrackStartTimeRef.current = currentTrackStartTime; }, [currentTrackStartTime]);
-  const resumePlaybackRef = useRef<{ trackId: string; progress: number; isPlaying: boolean } | null>(null);
+  const resumePlaybackRef = useRef<{ trackId: string; progress: number; duration: number; isPlaying: boolean } | null>(null);
   const resumeSeekFlagRef = useRef(false);
   const resumeStayPausedRef = useRef(false);
   const wasPlayingBeforeHiddenRef = useRef(false);
@@ -1114,6 +1160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (track) {
         resumeSeekFlagRef.current = true;
         restoreSeekRef.current = rp.progress;
+        restoreDurationRef.current = rp.duration > 0 ? rp.duration : null;
         resumeStayPausedRef.current = !rp.isPlaying;
         playTrackRef.current(rp.trackId);
       }
@@ -1187,7 +1234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         candidates.sort((a, b) => b.score - a.score);
         const winner = candidates[0];
         if (!winner && storageReadFailed) {
-          addNotification('No se pudieron cargar tus datos. Cierra y vuelve a abrir POUH para reintentar. No se ha sobrescrito el almacenamiento.', 'error');
+          addNotification('No se pudieron cargar tus datos. Cierra y vuelve a abrir APHEKA para reintentar. No se ha sobrescrito el almacenamiento.', 'error');
           return;
         }
         if (winner) {
@@ -1311,7 +1358,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setMusicProgress(data.musicProgress);
             if (data.currentTrackId) restoreSeekRef.current = data.musicProgress;
           }
-          if (data.musicDuration !== undefined) setMusicDuration(data.musicDuration);
+          if (data.musicDuration !== undefined) {
+            setMusicDuration(data.musicDuration);
+            if (data.currentTrackId) restoreDurationRef.current = data.musicDuration || null;
+          }
           // Fallback: sync localStorage backup (written on every track change and beforeunload)
           try {
             const savedId = localStorage.getItem('owa_current_track_id');
@@ -1363,6 +1413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               resumePlaybackRef.current = {
                 trackId: loadedData.currentTrackId,
                 progress: loadedData.musicProgress || 0,
+                duration: loadedData.musicDuration || 0,
                 isPlaying: false,
               };
             }
@@ -1664,7 +1715,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [isRest]);
 
-  // Global pomodoro completion detection â€” works even when not in Estudio
+  // Global pomodoro completion detection ” works even when not in Estudio
   const pomodoroCompletedRef = useRef(false);
   const completionSessionTimeRef = useRef(0);
   useEffect(() => {
@@ -2602,7 +2653,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       try {
-        // Phase 1: Loading/Reading file (ONCE â€” avoid Windows Defender collisions)
+        // Phase 1: Loading/Reading file (ONCE ” avoid Windows Defender collisions)
         updateProgress('loading_file', 10);
         let fileData: Uint8Array | undefined;
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -2654,7 +2705,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           listenedTime: 0
         };
 
-        // Phase 4: Save to storage (use pre-read buffer â€” no extra disk I/O)
+        // Phase 4: Save to storage (use pre-read buffer ” no extra disk I/O)
         updateProgress('saving_to_db', 10);
         const storedPath = await copyAudioToStorage(path, trackId, fileData).catch(() => path);
         newTrack.url = storedPath;
@@ -3023,8 +3074,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const playTrack = useCallback((id: string, preserveQueue = false, direction?:MusicTravel) => {
     if(!tracksRef.current.some(track=>track.id===id))return;
     if(settings.musicOffline&&!canPlayOffline(tracksRef.current.find(track=>track.id===id))){addNotification('La reproducción online está desactivada. Puedes usar tu biblioteca local.','info');return;}
-    repeatOnePlayedRef.current = false;
-    // Same track already loaded â€” just resume (no reload)
+    // Same track already loaded ” just resume (no reload)
     if (loadedTrackIdRef.current === id) {
       if (!globalAudio.paused) {
         setIsPlayingMusic(true);
@@ -3040,12 +3090,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         playAudioInstance(playSessionId);
         return;
       }
-      // Source invalid or not ready â€” force a full reload
+      // Source invalid or not ready ” force a full reload
       loadedTrackIdRef.current = null;
       loadingTrackIdRef.current = null;
     }
 
-    // Same track currently being loaded async â€” just mark to auto-play
+    // Same track currently being loaded async ” just mark to auto-play
     if (loadingTrackIdRef.current === id) {
       autoPlayRef.current = true;
       setIsPlayingMusic(true);
@@ -3085,7 +3135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentTrackStartTime(Date.now() / 1000);
     setIsPlayingMusic(!resumeStayPausedRef.current);
     setMusicProgress(restoreSeekRef.current ?? 0);
-    setMusicDuration(0);
+    setMusicDuration(restoreDurationRef.current ?? 0);
     try { localStorage.setItem('owa_current_track_id', id); } catch {}
 
     const track = tracksRef.current.find(t => t.id === id);
@@ -3223,7 +3273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 setIsPlayingMusic(true);
               }
             }).catch(() => {
-              // Not enough data yet â€” canplay handler will retry
+              // Not enough data yet ” canplay handler will retry
             });
           }
         } else {
@@ -3311,7 +3361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const hasSrc = !!audio.src;
 
     if (!hasSrc || audio.ended) {
-      // Audio has no source or ended â€” (re)load and play
+      // Audio has no source or ended ” (re)load and play
       autoPlayRef.current = false;
       if (isPlayingMusicRef.current) {
         activePlaySessionIdRef.current = null;
@@ -3329,7 +3379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Clear any pending fade-out
       if (fadeRampRef.current !== null) { clearInterval(fadeRampRef.current); fadeRampRef.current = null; }
       audio.volume = musicVolumeRef.current;
-      // Audio still loading â€” defer to canplay
+      // Audio still loading ” defer to canplay
       if (audio.readyState < 2 && hasSrc) {
         // Toggle off if already waiting for canplay
         if (autoPlayRef.current) {
@@ -3435,6 +3485,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onDurationChange = () => {
       const dur = audio.duration;
       if (isFinite(dur) && dur > 0) {
+        restoreDurationRef.current = null;
         setMusicDuration(dur);
         const cid = currentTrackIdRef.current;
         if (cid) {
@@ -3443,6 +3494,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     const onEnded = () => {
+      // Repetir 1: la misma canción vuelve a empezar y no avanza en la cola.
+      // Se resuelve antes que el recorrido de visitas y que la cola.
+      if (repeatModeRef.current === 'one' && currentTrackIdRef.current) {
+        try {
+          globalAudio.currentTime = 0;
+          void globalAudio.play().catch(() => setIsPlayingMusic(false));
+          setIsPlayingMusic(true);
+        } catch { setIsPlayingMusic(false); }
+        return;
+      }
       const forward=repeatModeRef.current!=='one'&&musicTraversalRef.current.forward.find(id=>id!==currentTrackIdRef.current&&tracksRef.current.some(t=>t.id===id&&canPlayTrack(t,playbackSettingsRef.current.musicOffline)));
       if(forward){playTrackRef.current(forward,true,'forward');if(coverModalTrackIdRef.current)setCoverModalTrackId(forward);return;}
       const result=nextMusicSelection({tracks:tracksRef.current,currentId:currentTrackIdRef.current,queue:musicQueueRef.current,sourcePool:queueSourceRef.current?.pool,shuffle:shuffleModeRef.current,repeat:repeatModeRef.current,history:trackHistoryRef.current,counts:playCountsRef.current,offline:playbackSettingsRef.current.musicOffline});
@@ -3559,7 +3620,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           intentionalPauseRef.current = false;
         }
       } else {
-        // Tab visible again â€” resume if we were playing
+        // Tab visible again ” resume if we were playing
         if (wasPlayingBeforeHiddenRef.current && currentTrackIdRef.current && loadedTrackIdRef.current) {
           const playSessionId = activePlaySessionIdRef.current;
           globalAudio.play().then(() => {
@@ -3996,7 +4057,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         startTime: p.startTime, endTime: p.endTime, allDay: !!p.allDay, color: p.color, googleEventId: p.googleEventId,
       }));
       const res = await syncCalendarTwoWay([...mainEvents, ...bridgeEvents]);
-      // Guardar mapeos de los eventos reciÃ©n creados en Google
+      // Guardar mapeos de los eventos recién creados en Google
       for (const m of res.newMappings) {
         if (m.appEventId.startsWith('plan:')) continue;
         updateEvent(m.appEventId, { googleEventId: m.googleEventId });
@@ -4100,9 +4161,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           googleTaskId: t.googleTaskId,
         }))
       );
-      // Guardar mapeos de las tareas reciÃ©n creadas en Google
+      // Guardar mapeos de las tareas recién creadas en Google
       for (const m of res.newMappings) updateTask(m.appTaskId, { googleTaskId: m.googleTaskId });
-      // Importar tareas aÃ±adidas directamente en la lista de Google
+      // Importar tareas añadidas directamente en la lista de Google
       for (const t of res.imported) {
         addTask({
           title: t.title, course: '', courseColor: '', priority: 'medium',
@@ -4286,7 +4347,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, activeSubtaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
-    currentTrackId, coverModalTrackId, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
+    currentTrackId, coverModalTrackId, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration: setMusicDurationCb, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     trackHistory, musicTraversal, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
@@ -4308,7 +4369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [...prev, { id: crypto.randomUUID(), name, origin:'catalog' as const, catalogId, ...(profileImage ? { profileImage } : {}) }];
       });
     }, []),
-    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'>>) => {
+    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'|'excludedTrackIds'>>) => {
       setArtists(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     }, []),
     deleteArtist: useCallback((id: string) => {

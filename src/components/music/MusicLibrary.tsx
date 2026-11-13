@@ -42,7 +42,7 @@ export default function MusicLibrary({ workspaceId = 'default',favoritesOnly=fal
     },[scopeKey,scoped,a.queueSource,a.musicQueue,a.currentTrackId]);
     const importFiles = async (folder = false) => {
         if (!isTauri()) {
-            toast('Importa tus archivos desde POUH de escritorio.');
+            toast('Importa tus archivos desde APHEKA de escritorio.');
             return;
         }
         try {

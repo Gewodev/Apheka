@@ -61,3 +61,38 @@ pub fn restore_workspace_pointer(window: tauri::WebviewWindow) -> Result<(), Str
     }
     Ok(())
 }
+
+/// Lightweight pointer repaint for the fullscreen presentation.
+///
+/// Some drivers keep the drawn Windows cursor frozen while the pointer keeps
+/// moving. Asking the child under the pointer to set its cursor again redraws it
+/// at the current position, without moving the pointer, without touching global
+/// settings and without activating another application.
+#[tauri::command]
+pub fn refresh_workspace_cursor(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" { return Ok(()); }
+    #[cfg(windows)]
+    {
+        let handle = window.hwnd().map_err(|e| e.to_string())?.0 as usize;
+        window.run_on_main_thread(move || unsafe {
+            use windows_sys::Win32::UI::WindowsAndMessaging::*;
+            let hwnd = handle as *mut core::ffi::c_void;
+            if GetForegroundWindow() != hwnd { return; }
+            let mut info: CURSORINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<CURSORINFO>() as u32;
+            // CURSOR_SUPPRESSED is a touch/pen interaction. Do not interfere with it.
+            if GetCursorInfo(&mut info) == 0 || info.flags & CURSOR_SUPPRESSED != 0 { return; }
+            let under_pointer = WindowFromPoint(info.ptScreenPos);
+            if under_pointer != hwnd && IsChild(hwnd, under_pointer) == 0 { return; }
+            PostMessageW(under_pointer, WM_SETCURSOR, under_pointer as usize,
+                ((WM_MOUSEMOVE << 16) | HTCLIENT as u32) as isize);
+            // Only a hidden cursor needs the display counter repaired. The counter is
+            // balanced afterwards so a repeated refresh cannot keep it positive.
+            if info.flags != 0 {
+                for _ in 0..8 { if ShowCursor(1) >= 0 { break; } }
+                for _ in 0..8 { if ShowCursor(-1) <= 0 { break; } }
+            }
+        }).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $out = Join-Path $repo 'src-tauri/installer-assets'
@@ -12,7 +12,7 @@ $line = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml('#34393B'), 1)
 $name = [Drawing.Font]::new('Segoe UI', 22, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
 $small = [Drawing.Font]::new('Segoe UI', 11, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $label = [Drawing.Font]::new('Segoe UI', 15, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
-function Draw-Pouh($graphics,$color,[single]$x,[single]$y,[single]$scale) {
+function Draw-Apheka($graphics,$color,[single]$x,[single]$y,[single]$scale) {
   $state=$graphics.Save();$graphics.TranslateTransform($x,$y);$graphics.ScaleTransform($scale,$scale)
   $pen=[Drawing.Pen]::new($color,3.4);$pen.StartCap=$pen.EndCap=[Drawing.Drawing2D.LineCap]::Round
   try {
@@ -38,12 +38,12 @@ try {
         $caption = [Drawing.Font]::new('Segoe UI', 10, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
         try {
           $g.DrawImage($logo, 22, 24, 58, 58)
-          Draw-Pouh $g $light.Color 22 99 1.0
+          Draw-Apheka $g $light.Color 22 99 1.0
           $g.FillRectangle($accent, 23, 136, 22, 3)
           $g.DrawString("Tu espacio.`nA tu ritmo.", $label, $light, [Drawing.RectangleF]::new(20, 155, 128, 55))
           $g.DrawString('Estudio, Charvis y música', $caption, $muted, [Drawing.RectangleF]::new(21, 218, 124, 32))
           $g.DrawLine($line, 23, 259, 141, 259)
-          $g.DrawString(('POUH ' + $version), $small, $light, 20, 269)
+          $g.DrawString(('APHEKA ' + $version), $small, $light, 20, 269)
           $g.DrawString('Hecho por Gewodev', $caption, $muted, 21, 292)
         } finally { $light.Dispose(); $caption.Dispose() }
       } else {
@@ -51,7 +51,7 @@ try {
         $caption = [Drawing.Font]::new('Segoe UI', 9, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
         try {
           $g.DrawImage($logo, 8, 13, 30, 30)
-          Draw-Pouh $g $ink.Color 45 13 0.64
+          Draw-Apheka $g $ink.Color 45 13 0.64
           $g.DrawString(('Escritorio · ' + $version), $caption, $muted, 46, 33)
         } finally { $headerName.Dispose(); $caption.Dispose() }
       }
@@ -62,4 +62,4 @@ try {
   $logo.Dispose(); $ink.Dispose(); $muted.Dispose(); $accent.Dispose(); $line.Dispose()
   $name.Dispose(); $small.Dispose(); $label.Dispose()
 }
-Write-Output 'POUH installer artwork generated; original logo preserved.'
+Write-Output 'APHEKA installer artwork generated; original logo preserved.'

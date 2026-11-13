@@ -1,0 +1,8 @@
+{
+  "steps": [
+    "a newer build raises a notice in the notification panel",
+    "the notice offers the update action and runs it",
+    "the same version is not announced twice"
+  ],
+  "errors": []
+}

@@ -30,6 +30,10 @@ function Get-ToolSignature {
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $repo
 try {
+  $config = Get-Content -LiteralPath (Join-Path $repo 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
+  $version = $config.version
+  $product = $config.productName
+  $prefix = $product.ToLowerInvariant()
   if ($Build) {
     & (Join-Path $PSScriptRoot 'create-installer-art.ps1')
     $asr=Get-Content -LiteralPath (Join-Path $repo 'src-tauri/asr-manifest.json') -Raw | ConvertFrom-Json
@@ -37,25 +41,18 @@ try {
     & (Join-Path $PSScriptRoot 'update-tool-hashes.ps1')
     $sourceBeforeBuild = Get-SourceSignature
     $toolsBeforeBuild = Get-ToolSignature
-    # pnpm escribe su banner en stderr; con ErrorActionPreference=Stop y
-    # PSNativeCommandUseErrorActionPreference activo eso se convertía en una
-    # NativeCommandExitException ~5 s después de arrancar. El resultado real
-    # se decide por $LASTEXITCODE, nunca por el texto de stderr.
-    $nativePrefWasSet = $PSNativeCommandUseErrorActionPreference
-    $PSNativeCommandUseErrorActionPreference = $false
-    try {
-      & pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis
-      $buildExit = $LASTEXITCODE
-    }
-    finally {
-      $PSNativeCommandUseErrorActionPreference = $nativePrefWasSet
-    }
-    if ($buildExit -ne 0) { throw "Build failed (exit $buildExit); no final package was published" }
+    # pnpm imprime el comando que ejecuta en stderr. En Windows PowerShell 5.1
+    # cualquier stderr nativo bajo ErrorActionPreference=Stop se convierte en
+    # NativeCommandError y abortaba el empaquetado en segundos. Se invoca a
+    # través de cmd para fusionar ambos flujos en un registro y decidir por
+    # $LASTEXITCODE, nunca por el texto de la salida.
+    $buildLog = Join-Path $repo "release/build-$version.tauri.log"
+    $buildLine = 'pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis'
+    & cmd /c "$buildLine > $buildLog 2>&1"
+    $buildExit = $LASTEXITCODE
+    if (Test-Path -LiteralPath $buildLog) { Get-Content -LiteralPath $buildLog -Tail 40 }
+    if ($buildExit -ne 0) { throw "Build failed (exit $buildExit); see release/build-$version.tauri.log" }
   }
-  $config = Get-Content -LiteralPath (Join-Path $repo 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
-  $version = $config.version
-  $product = $config.productName
-  $prefix = $product.ToLowerInvariant()
   $source = Join-Path $repo "src-tauri/target/release/bundle/nsis/${product}_${version}_x64-setup.exe"
   $binary = Get-Item -LiteralPath $source
   if ($binary.VersionInfo.ProductName -ne $product -or $binary.VersionInfo.ProductVersion -ne $version) { throw 'Installer version mismatch' }

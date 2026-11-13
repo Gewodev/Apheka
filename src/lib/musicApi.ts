@@ -116,7 +116,7 @@ async function webStreamUrl(videoId: string): Promise<string> {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
-async function webDownloadAudio(_id:string,_url:string,_format:string):Promise<void>{throw Error('Descarga el audio desde POUH de escritorio. No se envían enlaces a conversores públicos.');}
+async function webDownloadAudio(_id:string,_url:string,_format:string):Promise<void>{throw Error('Descarga el audio desde APHEKA de escritorio. No se envían enlaces a conversores públicos.');}
 
 // ── Commands ──
 

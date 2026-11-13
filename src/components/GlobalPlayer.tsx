@@ -3,15 +3,61 @@ import {type CSSProperties, useEffect, useRef, useState} from 'react';
 import {Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart, ChevronUp, ChevronDown, Music, Shuffle, Repeat2, Headphones} from 'lucide-react';
 import {useAppSlice} from '../store/AppContext';
 import {useMusicTransport} from '../lib/musicTransport';
+import {syncNativeMedia, subscribeNativeMediaButtons} from '../lib/nativeMedia';
+import {extractYouTubeId} from '../lib/ytEngine';
 import MusicTimeline from './music/MusicTimeline';
 
 export default function GlobalPlayer({sidebarCollapsed: _collapsed}: {sidebarCollapsed: boolean}) {
-  const a = useAppSlice(['tracks', 'currentTrackId', 'isPlayingMusic', 'toggleMusicPlayback', 'musicVolume', 'setMusicVolume', 'toggleTrackFavorite', 'shuffleMode', 'setShuffleMode', 'repeatMode', 'setRepeatMode']);
+  const a = useAppSlice(['tracks', 'currentTrackId', 'isPlayingMusic', 'toggleMusicPlayback', 'musicVolume', 'setMusicVolume', 'toggleTrackFavorite', 'shuffleMode', 'setShuffleMode', 'repeatMode', 'setRepeatMode', 'musicProgress', 'musicDuration']);
   const transport = useMusicTransport();
   const track = a.tracks.find(t => t.id === a.currentTrackId);
   const [inRoom, setInRoom] = useState(false);
   const [expanded, setExpanded] = useState(() => localStorage.getItem('owa_player_expanded') === '1');
   const previousVolume = useRef(a.musicVolume || .5);
+  // Latest transport/toggle for the native button handler, which is registered
+  // once and must not capture stale closures.
+  const controls = useRef({toggle: a.toggleMusicPlayback, playing: a.isPlayingMusic, transport});
+  controls.current = {toggle: a.toggleMusicPlayback, playing: a.isPlayingMusic, transport};
+  useEffect(() => {
+    let remove: (() => void) | undefined;
+    let disposed = false;
+    void subscribeNativeMediaButtons(button => {
+      const current = controls.current;
+      if (button === 'play') {
+        if (!current.playing) current.toggle();
+      } else if (button === 'pause') {
+        if (current.playing) current.toggle();
+      } else if (button === 'next') {
+        current.transport.next();
+      } else if (button === 'previous') {
+        current.transport.previous();
+      } else if (button === 'stop') {
+        if (current.playing) current.toggle();
+      }
+    }).then(unlisten => { if (disposed) unlisten(); else remove = unlisten; });
+    return () => { disposed = true; remove?.(); };
+  }, []);
+  // Native Windows flyout: title, artist, artwork, play/pause, back/forward.
+  const ytCover = track?.source === 'youtube' && track.url ? extractYouTubeId(track.url) : null;
+  const cover = track ? track.coverImage || track.coverUrl || (ytCover ? `https://i.ytimg.com/vi/${ytCover}/hqdefault.jpg` : '') : '';
+  const nativeDuration = Math.max(0, a.musicDuration > 0 ? a.musicDuration : track?.duration || 0);
+  const nativePosition = Math.floor(Math.max(0, Math.min(1, Number.isFinite(a.musicProgress) ? a.musicProgress : 0)) * nativeDuration);
+  const nativeNext = transport.hasNext;
+  const nativePrev = transport.hasPrevious;
+  useEffect(() => {
+    if (!track) { syncNativeMedia(null); return; }
+    syncNativeMedia({
+      title: track.title,
+      artist: track.artist,
+      album: 'APHEKA',
+      playing: a.isPlayingMusic,
+      position: nativePosition,
+      duration: nativeDuration,
+      cover,
+      canNext: nativeNext,
+      canPrev: nativePrev,
+    });
+  }, [track?.id, track?.title, track?.artist, cover, a.isPlayingMusic, nativePosition, nativeDuration, nativeNext, nativePrev]);
   useEffect(() => {
     const update = (event: Event) => setInRoom(!!(event as CustomEvent).detail);
     window.addEventListener('apheka:music-room-visible', update);

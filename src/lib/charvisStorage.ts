@@ -17,7 +17,7 @@ export async function protectedGet<T>(key:string):Promise<T|undefined>{
  const saved=await get<T|Envelope>(key);if(saved===undefined)return undefined;
  if((saved as Envelope)?.__charvisEncrypted!==1){await protectedSet(key,saved);return saved as T;}
  const item=saved as Envelope;let plain:string;
- if(item.mode==='windows-dpapi'){if(!isTauri())throw Error('Este historial está protegido por la cuenta de Windows de POUH.');plain=await invoke('charvis_vault',{operation:'open',value:item.data});}
+ if(item.mode==='windows-dpapi'){if(!isTauri())throw Error('Este historial está protegido por la cuenta de Windows de APHEKA.');plain=await invoke('charvis_vault',{operation:'open',value:item.data});}
  else{const key=await get<CryptoKey>('apheka_charvis_browser_key');if(!key)throw Error('Falta la clave local del historial de este navegador.');plain=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(item.iv!)},key,decode(item.data)));}
  return parse(plain) as T;
 }

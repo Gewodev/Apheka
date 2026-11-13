@@ -31,7 +31,7 @@ function McpBridge({transport}:{transport?:McpTransport}={}) {
             const timer=setTimeout(()=>respond(false),Math.max(0,request.expiresAt-Date.now()-500));
             rejectApproval=()=>respond(false);setApproval({request,respond});
           });
-          if(!accepted){status='cancelled';throw new Error('Operación no confirmada en POUH. No se ha ejecutado.');}
+          if(!accepted){status='cancelled';throw new Error('Operación no confirmada en APHEKA. No se ha ejecutado.');}
         }
         if(disposed || !await port.invoke<boolean>('mcp_claim',{requestId:request.requestId}))throw new Error('La conexión se cerró o la solicitud expiró antes de ejecutarse.');
         const {runMcpTool}=await import('../lib/mcpActions');

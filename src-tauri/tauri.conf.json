@@ -1,6 +1,6 @@
 {
-  "productName": "POUH",
-  "version": "6.26.7",
+  "productName": "APHEKA",
+  "version": "6.27.0",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "POUH",
+        "title": "APHEKA",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -83,5 +83,5 @@
     },
     "notification": null
   },
-  "mainBinaryName": "POUH"
+  "mainBinaryName": "APHEKA"
 }

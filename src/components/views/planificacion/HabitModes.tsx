@@ -1,11 +1,47 @@
 import React,{useState} from 'react';
-import {Droplets,Dumbbell,Minus,Plus} from 'lucide-react';
+import {Droplets,Dumbbell,Minus,Plus,Sparkles} from 'lucide-react';
 import {useAppSlice} from '../../../store/AppContext';
-import {readHabitReminder,HABIT_REMINDER_KEY} from '../../../lib/habitRhythm';
 export default function HabitModes({date}:{date:string}){
- const a=useAppSlice(['habits','addHabit','updateHabit']),[config,setConfig]=useState(readHabitReminder);
- const save=(next:typeof config)=>{setConfig(next);try{localStorage.setItem(HABIT_REMINDER_KEY,JSON.stringify(next));}catch{}};
- return <section className="habit-modes" aria-label="Opciones de hábitos"><div className="habit-mode-options">{(['water','exercise'] as const).map(kind=>{const h=a.habits.find(h=>h.metricKind===kind&&!h.isArchived),old=a.habits.find(h=>h.metricKind===kind),label=kind==='water'?'Agua':'Ejercicio';return <label key={kind}><input type="checkbox" checked={!!h} onChange={e=>{if(h)a.updateHabit(h.id,{isArchived:true});else if(old)a.updateHabit(old.id,{isArchived:false});else if(e.target.checked)a.addHabit(label,{metricKind:kind,dailyGoal:kind==='water'?8:30});}}/>{label}</label>;})}</div>
- <div className="habit-metric-grid">{a.habits.filter(h=>h.metricKind&&!h.isArchived).map(h=>{const water=h.metricKind==='water',goal=Math.max(1,h.dailyGoal|| (water?8:30)),value=h.amountOn?.[date]||0,step=water?1:5;const update=(amount:number)=>{const amountOn={...h.amountOn,[date]:Math.max(0,Math.min(1440,amount))};const entries=Object.entries(amountOn).sort(([a],[b])=>b.localeCompare(a)).slice(0,90);a.updateHabit(h.id,{amountOn:Object.fromEntries(entries),completedOn:amountOn[date]>=goal?[...new Set([...h.completedOn,date])]:h.completedOn.filter(d=>d!==date)});};return <article key={h.id} data-kind={h.metricKind} style={{'--habit-fill':`${Math.min(100,value/goal*100)}%`} as React.CSSProperties}><div className="habit-meter" aria-hidden="true">{water?<Droplets size={30}/>:<Dumbbell size={30}/>}</div><div><strong>{h.name}</strong><p><output>{value}</output> / {goal} {water?'vasos':'min'}</p><label>Meta personal <input aria-label={'Meta de '+h.name} type="number" min="1" max={water?30:300} value={goal} onChange={e=>{const n=Number(e.target.value);if(n>=1&&n<=(water?30:300)){a.updateHabit(h.id,{dailyGoal:n,completedOn:value>=n?[...new Set([...h.completedOn,date])]:h.completedOn.filter(d=>d!==date)});}}}/></label></div><div className="habit-metric-actions"><button aria-label={'Restar '+h.name} onClick={()=>update(value-step)} disabled={value===0}><Minus size={15}/></button><button aria-label={'Registrar '+h.name} onClick={()=>update(value+step)}><Plus size={15}/><span>{step}</span></button></div></article>;})}</div>
- <details className="habit-reminder-options"><summary>Recordatorio de fin de jornada</summary><div className="habit-rhythm-status">Recordatorio automático según tu jornada</div><p>Aprende de tu actividad en POUH, por día de la semana. Funciona mientras la app está abierta y respeta tus alertas generales. Hasta reunir datos usa tu hora de referencia.</p>{config.enabled&&<div><label>Anticipación<select value={config.lead} onChange={e=>save({...config,lead:Number(e.target.value) as 60|120})}><option value="60">Una hora</option><option value="120">Dos horas</option></select></label><label>Fin de jornada de referencia<input type="time" value={`${String(Math.floor(config.fallback/60)%24).padStart(2,'0')}:${String(config.fallback%60).padStart(2,'0')}`} onChange={e=>{if(e.target.value){const [h,m]=e.target.value.split(':').map(Number);save({...config,fallback:h*60+m+(h<4?1440:0)});}}}/></label></div>}</details></section>;
+ const a=useAppSlice(['habits','addHabit','updateHabit']);
+ const modes=[{kind:'water' as const,label:'Agua',unit:'vasos',step:1,goal:8,max:30,icon:<Droplets size={18}/>,hint:'Vasos de agua registrados hoy'},{kind:'exercise' as const,label:'Ejercicio',unit:'min',step:5,goal:30,max:300,icon:<Dumbbell size={18}/>,hint:'Minutos de ejercicio registrados hoy'}];
+ const update=(habitId:string,amount:number)=>{
+  const habit=a.habits.find(h=>h.id===habitId);if(!habit)return;
+  const goal=Math.max(1,habit.dailyGoal||8),amountOn={...habit.amountOn,[date]:Math.max(0,Math.min(1440,amount))};
+  const entries=Object.entries(amountOn).sort(([x],[y])=>y.localeCompare(x)).slice(0,90);
+  a.updateHabit(habitId,{amountOn:Object.fromEntries(entries),completedOn:amountOn[date]>=goal?[...new Set([...habit.completedOn,date])]:habit.completedOn.filter(d=>d!==date)});
+ };
+ return <section className="habit-modes" aria-label="Hábitos de agua y ejercicio">
+  <div className="habit-mode-options">
+   {modes.map(mode=>{
+    const active=a.habits.find(h=>h.metricKind===mode.kind&&!h.isArchived),archived=a.habits.find(h=>h.metricKind===mode.kind&&h.isArchived);
+    return <button key={mode.kind} type="button" className="habit-mode-card" data-kind={mode.kind} data-active={active?true:false} aria-pressed={!!active}
+     onClick={()=>{if(active)a.updateHabit(active.id,{isArchived:true});else if(archived)a.updateHabit(archived.id,{isArchived:false});else a.addHabit(mode.label,{metricKind:mode.kind,dailyGoal:mode.goal});}}>
+     <span className="habit-mode-icon" aria-hidden="true">{mode.icon}</span>
+     <span className="habit-mode-text"><strong>{mode.label}</strong><small>{mode.hint}</small></span>
+     <span className="habit-mode-state">{active?'Activo':'Inactivo'}</span>
+    </button>;
+   })}
+  </div>
+  <div className="habit-metric-grid">
+   {a.habits.filter(h=>h.metricKind&&!h.isArchived).map(h=>{
+    const water=h.metricKind==='water',mode=modes.find(m=>m.kind===h.metricKind)!;
+    const goal=Math.max(1,h.dailyGoal||mode.goal),value=h.amountOn?.[date]||0,step=mode.step;
+    const done=value>=goal,percent=Math.min(100,Math.round(value/goal*100));
+    return <article key={h.id} data-kind={h.metricKind} data-complete={done} style={{'--habit-fill':`${percent}%`} as React.CSSProperties}>
+     <div className="habit-meter" aria-hidden="true">{water?<Droplets size={30}/>:<Dumbbell size={30}/>}<span className="habit-meter-fill"/></div>
+     <div className="habit-metric-body">
+      <strong>{h.name}</strong>
+      <p><output>{value}</output><span className="habit-metric-goal">/ {goal} {mode.unit}</span>{done&&<span className="habit-metric-done"><Sparkles size={12}/>Completado</span>}</p>
+      <div className="habit-progress" role="progressbar" aria-label={'Progreso de '+h.name} aria-valuenow={value} aria-valuemin={0} aria-valuemax={goal}><span style={{width:percent+'%'}}/></div>
+      <label className="habit-goal">Meta personal<input aria-label={'Meta de '+h.name} type="number" min="1" max={water?30:300} value={goal} onChange={e=>{const n=Number(e.target.value);if(n>=1&&n<=(water?30:300)){a.updateHabit(h.id,{dailyGoal:n,completedOn:value>=n?[...new Set([...h.completedOn,date])]:h.completedOn.filter(d=>d!==date)});}}}/><span>{mode.unit}</span></label>
+     </div>
+     <div className="habit-metric-actions">
+      <button type="button" aria-label={'Restar '+h.name} title={'Restar '+step+' '+mode.unit} onClick={()=>update(h.id,value-step)} disabled={value===0}><Minus size={15}/></button>
+      <button type="button" className="habit-metric-add" aria-label={'Registrar '+h.name} title={'Añadir '+step+' '+mode.unit} onClick={()=>update(h.id,value+step)}><Plus size={15}/><span>{step}</span></button>
+     </div>
+    </article>;
+   })}
+  </div>
+  {!a.habits.some(h=>h.metricKind&&!h.isArchived)&&<p className="habit-empty">Activa el agua o el ejercicio para registrar tu cantidad diaria y aprender de tu ritmo.</p>}
+ </section>;
 }

@@ -2810,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "owa-studio"
-version = "6.26.7"
+version = "6.27.0"
 dependencies = [
  "axum",
  "base64 0.22.1",

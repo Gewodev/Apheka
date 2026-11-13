@@ -62,6 +62,10 @@ mod platform {
         duration: f64,
         cover_key: Option<String>,
         cover: Option<RandomAccessStreamReference>,
+        /// `false` until the first snapshot is applied. Windows starts the
+        /// session in `Stopped`, so the initial status and buttons must be
+        /// written even when they equal our own defaults.
+        primed: bool,
     }
 
     thread_local! {
@@ -138,7 +142,7 @@ mod platform {
                 SystemMediaTransportControlsButton::Previous => "previous",
                 _ => return Ok(()),
             };
-            let _ = handle.emit("pouh-media-button", name);
+            let _ = handle.emit("apheka-media-button", name);
             Ok(())
         });
         let _ = controls.ButtonPressed(&handler);
@@ -149,12 +153,13 @@ mod platform {
             artist: String::new(),
             album: String::new(),
             playing: false,
-            can_next: true,
-            can_prev: true,
+            can_next: false,
+            can_prev: false,
             position: 0.0,
             duration: 0.0,
             cover_key: None,
             cover: None,
+            primed: false,
         })
     }
 
@@ -180,7 +185,13 @@ mod platform {
         let Some(()) = with_session(hwnd, app, |s| {
             let _ = s.controls.SetIsEnabled(true);
 
-            let mut refresh = s.title != update.title
+            // First snapshot of a session (or the first after `clear`): write
+            // every property, because Windows defaults do not match ours.
+            let force = !s.primed;
+            s.primed = true;
+
+            let mut refresh = force
+                || s.title != update.title
                 || s.artist != update.artist
                 || s.album != update.album;
             if let Some(spec) = update.cover.as_deref() {
@@ -214,7 +225,7 @@ mod platform {
                 }
             }
 
-            if s.playing != update.playing {
+            if force || s.playing != update.playing {
                 s.playing = update.playing;
                 let status = if update.playing {
                     MediaPlaybackStatus::Playing
@@ -223,11 +234,11 @@ mod platform {
                 };
                 let _ = s.controls.SetPlaybackStatus(status);
             }
-            if s.can_next != update.can_next {
+            if force || s.can_next != update.can_next {
                 s.can_next = update.can_next;
                 let _ = s.controls.SetIsNextEnabled(update.can_next);
             }
-            if s.can_prev != update.can_prev {
+            if force || s.can_prev != update.can_prev {
                 s.can_prev = update.can_prev;
                 let _ = s.controls.SetIsPreviousEnabled(update.can_prev);
             }
@@ -273,6 +284,7 @@ mod platform {
             s.duration = 0.0;
             s.cover_key = None;
             s.cover = None;
+            s.primed = false;
         });
     }
 }

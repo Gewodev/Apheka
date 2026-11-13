@@ -57,7 +57,7 @@ export const catalogDownloads = { subscribe: (fn: () => void) => { subscribers.a
     async attach(fn: Completion, mb: number) { completion = fn; budget = mb; if (!ready) {
         const saved = await get<CatalogJob[]>('apheka_catalog_jobs_v1').catch(() => []);
         const pending = jobs;
-        jobs = Array.isArray(saved) ? saved.slice(-100).filter(j => j?.item && /^[-\w]{1,64}$/.test(j.item.id) && typeof j.id === 'string').map(j => ['queued', 'active', 'cancelling'].includes(j.status) ? { ...j, status: 'error', error: 'Se interrumpió al cerrar POUH. Pulsa reintentar.' } : j) : [];
+        jobs = Array.isArray(saved) ? saved.slice(-100).filter(j => j?.item && /^[-\w]{1,64}$/.test(j.item.id) && typeof j.id === 'string').map(j => ['queued', 'active', 'cancelling'].includes(j.status) ? { ...j, status: 'error', error: 'Se interrumpió al cerrar APHEKA. Pulsa reintentar.' } : j) : [];
         jobs = [...jobs.filter(j => !pending.some(p => p.id === j.id)), ...pending].slice(-100);
         ready = true;
         emit();

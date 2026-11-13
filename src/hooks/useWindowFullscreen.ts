@@ -8,6 +8,12 @@ import { createFullscreenController, type FullscreenPort } from '../lib/fullscre
 
 const native = isTauri();
 const recoverPointer = createPointerRecovery(() => invoke('restore_workspace_pointer'));
+
+/** Ask Windows to redraw the cursor at the current pointer position. */
+const refreshNativeCursor = () => {
+  if (!native) return;
+  void invoke('refresh_workspace_cursor').catch(() => {});
+};
 const port: FullscreenPort = native ? {
   read: () => getCurrentWindow().isFullscreen(),
   write: active => getCurrentWindow().setFullscreen(active),
@@ -51,6 +57,15 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
   useEffect(() => {
     let disposed = false;
     let compatiblePointer:ReturnType<typeof createCompatiblePointer>|null=null;
+    let cursorWatch:number|undefined;
+    const stopCursorWatch=()=>{if(cursorWatch!==undefined){window.clearInterval(cursorWatch);cursorWatch=undefined;}};
+    const startCursorWatch=()=>{
+      if(!native||cursorWatch!==undefined)return;
+      // Fullscreen can leave the drawn Windows cursor stale while the pointer
+      // keeps moving. Ask for a repaint of the same cursor, never a second one.
+      refreshNativeCursor();
+      cursorWatch=window.setInterval(()=>{if(document.visibilityState!=='visible'||!document.hasFocus())return;refreshNativeCursor();},250);
+    };
     const syncPointer=()=>{const active=native&&/Windows/i.test(navigator.userAgent)&&windowFullscreen.getSnapshot().active&&compatiblePointerEnabled();if(active){if(!compatiblePointer)compatiblePointer=createCompatiblePointer();compatiblePointer.setEnabled(true);}else{compatiblePointer?.dispose();compatiblePointer=null;}};
     window.addEventListener(POINTER_PREFERENCE_EVENT,syncPointer);
     const unlisten: (() => void)[] = [];
@@ -86,6 +101,7 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
       if (!state.busy && state.error) onError(state.error);
       document.documentElement.dataset.fullscreen = String(state.active);
       syncPointer();
+      if (state.active) startCursorWatch(); else stopCursorWatch();
     });
     window.addEventListener('keydown', keyboard);
     document.addEventListener('keydown', captureEscape, true);
@@ -110,6 +126,7 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
       window.removeEventListener('resize', recover);
       delete document.documentElement.dataset.fullscreen;
       window.removeEventListener(POINTER_PREFERENCE_EVENT,syncPointer);
+      stopCursorWatch();
       compatiblePointer?.dispose();
     };
   }, [onError]);

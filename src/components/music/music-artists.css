@@ -53,3 +53,35 @@
 @container music-content (max-width:560px){.music-studio :is(.music-discover,.music-artists) .artist-profile{grid-template-columns:88px minmax(0,1fr)}.music-studio .artist-profile>.music-identity-artist{width:88px!important;height:88px!important;inline-size:88px!important;block-size:88px!important}}
 
 .artist-track-identity{display:grid;gap:4px;min-width:0}.artist-track-identity strong{font:500 14px/1.5 var(--font-primary);overflow-wrap:anywhere}.artist-track-identity small{font:11px/1.5 var(--font-primary);color:var(--text-secondary);overflow-wrap:anywhere}
+
+/* APHEKA 6.27.0: artist rows with evidence, removal and profile editing. */
+.music-artists .artist-track-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px}
+.music-artists .artist-track-row>button:first-child{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:14px;width:100%;padding:9px 10px;border:1px solid transparent;background:transparent;border-radius:8px;color:var(--text-primary);text-align:left;cursor:pointer}
+.music-artists .artist-track-row>button:first-child:hover{background:var(--bg-hover)}
+.music-artists .artist-track-row>button:first-child>time{font:12px var(--font-primary);font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.music-artists .artist-track-row>button:first-child>strong{min-width:0;font:500 14px/1.55 var(--font-primary);overflow-wrap:anywhere}
+.artist-evidence{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid var(--border-subtle);background:var(--bg-hover);font:500 10px/1 var(--font-primary);color:var(--text-tertiary);white-space:nowrap}
+.artist-evidence-chosen{border-color:color-mix(in srgb,var(--accent) 34%,transparent);background:color-mix(in srgb,var(--accent) 9%,transparent);color:var(--accent)}
+.artist-evidence-library{border-color:color-mix(in srgb,var(--success,#10b981) 32%,transparent);background:color-mix(in srgb,var(--success,#10b981) 9%,transparent);color:var(--success,#10b981)}
+.artist-evidence-catalog{border-color:color-mix(in srgb,var(--success,#10b981) 32%,transparent);background:color-mix(in srgb,var(--success,#10b981) 9%,transparent);color:var(--success,#10b981)}
+.artist-evidence-pending{border-color:color-mix(in srgb,#f59e0b 34%,transparent);background:color-mix(in srgb,#f59e0b 9%,transparent);color:#f59e0b}
+.music-artists .artist-track-remove{display:grid;place-items:center;width:30px;height:30px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--text-muted);cursor:pointer;transition:border-color 140ms ease,color 140ms ease,background 140ms ease}
+.music-artists .artist-track-remove:hover{border-color:color-mix(in srgb,#ef4444 40%,transparent);color:#ef4444;background:color-mix(in srgb,#ef4444 10%,transparent)}
+.artist-featured-section{margin-top:18px}
+.artist-featured-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border-subtle)}
+.artist-featured-header h3{margin:0;font:600 13px/1.4 var(--font-primary);letter-spacing:.02em;color:var(--text-primary)}
+.artist-featured-header span{font:11.5px var(--font-primary);color:var(--text-tertiary)}
+.artist-unverified{margin-top:18px;padding-top:14px;border-top:1px dashed var(--border-subtle)}
+.artist-unverified h4{margin:0 0 4px;font:600 12px/1.4 var(--font-primary);color:var(--text-secondary)}
+.artist-unverified p{margin:0 0 8px;font:11.5px/1.6 var(--font-primary);color:var(--text-tertiary)}
+.artist-profile-image-edit{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--border-subtle);border-radius:9px;background:var(--bg-surface)}
+.artist-profile-image-edit img,.artist-profile-image-edit>span{width:56px;height:56px;border-radius:9px;object-fit:cover;display:grid;place-items:center;font:11px var(--font-primary);color:var(--text-tertiary);background:var(--bg-hover)}
+.artist-excluded-list{margin-top:14px;padding-top:12px;border-top:1px solid var(--border-subtle)}
+.artist-excluded-list h3{margin:0 0 4px;font:600 12px var(--font-primary);color:var(--text-secondary)}
+.artist-excluded-list p{margin:0 0 8px;font:11.5px var(--font-primary);color:var(--text-tertiary)}
+.artist-excluded-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;font:12px var(--font-primary);color:var(--text-secondary)}
+.artist-excluded-list>div>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:700px){
+ .music-artists .artist-track-row{grid-template-columns:minmax(0,1fr) auto}
+ .music-artists .artist-evidence{grid-column:1/-1;justify-self:start;margin-left:52px;margin-top:-4px}
+}

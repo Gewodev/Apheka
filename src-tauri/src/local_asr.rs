@@ -143,7 +143,7 @@ pub async fn charvis_local_transcribe(
         } else if cfg!(debug_assertions) {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/asr")
         } else {
-            return Err("Reinstala POUH para recuperar el dictado local.".into());
+            return Err("Reinstala APHEKA para recuperar el dictado local.".into());
         };
         let temp_path = std::env::temp_dir().join(format!("apheka-asr-{id}"));
         std::fs::create_dir(&temp_path).map_err(|_| "No se pudo preparar el audio.")?;
@@ -223,7 +223,7 @@ fn verify(root: &Path) -> Result<(), String> {
             hash.update(&buf[..n]);
         }
         if format!("{:x}", hash.finalize()) != entry["sha256"].as_str().unwrap_or("") {
-            return Err("Un recurso del dictado está dañado. Reinstala POUH.".into());
+            return Err("Un recurso del dictado está dañado. Reinstala APHEKA.".into());
         }
     }
     Ok(())

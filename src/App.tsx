@@ -1,5 +1,6 @@
 import './workspace-6266.css';
 import './workspace-6267.css';
+import './workspace-6270.css';
 import HabitReminderHost from './components/ui/HabitReminderHost';
 import NotificationNavigation from './components/NotificationNavigation';
 import {useCharvisEnabled, setCharvisEnabled} from './lib/charvisAvailability';
@@ -103,11 +104,27 @@ export function AppContent() {
     const ytId = extractYouTubeId(youtubeVideoUrl);
     const ytList = extractPlaylistId(youtubeVideoUrl);
     if (ytList) return `https://www.youtube.com/embed/videoseries?list=${ytList}&autoplay=1&loop=0&rel=0&modestbranding=1&controls=1`;
-    if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&loop=0&rel=0&modestbranding=1&controls=1`;
+    // Sin la API de YouTube no hay eventos de fin: el bucle 1 se resuelve de
+    // forma nativa con loop + playlist del mismo vídeo.
+    if (ytId) {
+      const loop = repeatMode === 'one' ? 'loop=1&playlist=' + ytId + '&' : 'loop=0&';
+      return `https://www.youtube.com/embed/${ytId}?autoplay=1&${loop}rel=0&modestbranding=1&controls=1`;
+    }
     return null;
-  }, [youtubeVideoUrl, ytMode]);
+  }, [youtubeVideoUrl, ytMode, repeatMode]);
 
   const handleYtEnded = useCallback(() => {
+    // Repetir 1: la misma canción vuelve a empezar, sin avanzar en la cola.
+    if (repeatMode === 'one' && currentTrackId) {
+      if (youtubeVideoUrl && generalYtControl.seekTo && generalYtControl.playVideo) {
+        generalYtControl.seekTo(0);
+        generalYtControl.playVideo();
+        setIsPlayingMusic(true);
+        return;
+      }
+      const again = nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
+      if (again.id) { setMusicQueue(again.queue); playTrack(again.id,true); setIsPlayingMusic(true); return; }
+    }
     const selected=nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
     setMusicQueue(selected.queue);
     if(selected.id===currentTrackId&&selected.id&&youtubeVideoUrl){generalYtControl.seekTo?.(0);generalYtControl.playVideo?.();setIsPlayingMusic(true);return;}
@@ -563,7 +580,7 @@ export function AppContent() {
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
         <div className="sidebar-logo" role="button" tabIndex={0} aria-label={isCollapsed ? 'Expandir menú' : 'Contraer menú'} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSidebar();}}} onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
-          <img src="/owa_logo.png" alt="POUH" className="sidebar-logo-img" />
+          <img src="/owa_logo.png" alt="APHEKA" className="sidebar-logo-img" />
           {!isCollapsed && <AphekaWordmark />}
         </div>
 
