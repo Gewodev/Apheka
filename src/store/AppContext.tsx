@@ -1084,6 +1084,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const intentionalPauseRef = useRef(false);
   const fadeRampRef = useRef<number | null>(null);
   const restoreSeekRef = useRef<number | null>(null);
+  // La posicion de la musica cambia cada segundo: se guarda aparte para no
+  // reescribir el estado completo en cada tic del reloj.
+  const musicProgressRef = useRef(musicProgress);
+  const musicDurationRef = useRef(musicDuration);
+  useLayoutEffect(() => { musicProgressRef.current = musicProgress; musicDurationRef.current = musicDuration; }, [musicProgress, musicDuration]);
   // Duration known from the previous session: it is kept until the real
   // media reports its own, so the timeline and the native flyout stay
   // coherent right after a restart.
@@ -1369,7 +1374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setCurrentTrackId(savedId);
             }
             const savedProgress = localStorage.getItem('owa_music_progress');
-            if (savedProgress && data.musicProgress === undefined) {
+            if (savedProgress && (data.musicProgress === undefined || (savedId && savedId === data.currentTrackId))) {
               const p = parseFloat(savedProgress);
               setMusicProgress(p);
               if (savedId && savedId !== data.currentTrackId) restoreSeekRef.current = p;
@@ -1778,6 +1783,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const collectionStructure=useMemo(()=>({tasks:taskPresentationRef.current,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[taskPresentationRef.current,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
   const stableCollectionsJson=useMemo(()=>JSON.stringify({habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
   const savedStructureRef=useRef<typeof collectionStructure|null>(null),lastCounterMirrorRef=useRef(0),lastCounterStoreRef=useRef(0);
+  // La posicion de la cancion se guarda aparte: es un dato diminuto que cambia
+  // cada segundo y no debe forzar la reescritura del estado completo.
+  useEffect(() => {
+    if (!hydrated || !currentTrackId) return;
+    try {
+      localStorage.setItem('owa_music_progress', String(musicProgress));
+      localStorage.setItem('owa_music_duration', String(musicDuration));
+    } catch { /* noop */ }
+  }, [hydrated, currentTrackId, musicProgress, musicDuration]);
+
   // Debounced save
   useEffect(() => {
     if (!hydrated) return;
@@ -1790,7 +1805,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
-        musicProgress, musicDuration,
+        musicProgress: musicProgressRef.current, musicDuration: musicDurationRef.current,
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
@@ -1803,7 +1818,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // creada se perdía al reiniciar.
     // Espejo síncrono en localStorage: el dato sobrevive a un cierre instantáneo
     // (IDB y backup/disco siguen en el debounce, como capas secundarias).
-    if(structureChanged||Date.now()-lastCounterMirrorRef.current>=10000){
+    if(structureChanged||Date.now()-lastCounterMirrorRef.current>=30000){
     lastCounterMirrorRef.current=Date.now();
     const json=latestJsonRef.current!;
     try {
@@ -1863,7 +1878,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     debounceTimerRef.current = t;
   }, [
     tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings,
-    sessionTime, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, dailyPerformances,
+    sessionTime, musicListeningTime, dailyMusicTime, dailyPerformances,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningDate,
     downloadPath, youtubeVideoUrl,

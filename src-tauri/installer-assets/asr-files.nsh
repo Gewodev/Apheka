@@ -1,31 +1,7 @@
-; Generated from the verified ASR manifest and local notice. Do not edit.
+; Generated from the verified dictation manifest. Only the license travels with the installer.
 !macro APHEKA_ASR_FILE SOURCE TARGET
-  !if "${TARGET}" == "asr\moonshine.dll"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "5785b084680b7cb335e95b2e99e9c243e4b15833a30b1add5a4598694f8b48aa"
-  !else if "${TARGET}" == "asr\onnxruntime.dll"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "dec964ab1ee36cc9b0ae247d13b376627992fc57dec0454354017ab8fd84f1ea"
-  !else if "${TARGET}" == "asr\LICENSE.txt"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "7b749ee9a1bc694b648b0cfa1f4fbfda49d8af14cbb76dedab6fb9f086edfa7a"
-  !else if "${TARGET}" == "asr\model\adapter.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "2efd97cd2ee7d89578dd1d429a849be9fe37ac81dd9c4e1d31c8a2e7f85d43e6"
-  !else if "${TARGET}" == "asr\model\cross_kv.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "9e268b1b3bb0f9ff79bca6e76055d41298de0a5ba52505ee04907a2642efa3ae"
-  !else if "${TARGET}" == "asr\model\decoder_kv.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "7adf56b982df98e385d71823b9a40cf9296ae3a746efcf03f3d7bb4604032db0"
-  !else if "${TARGET}" == "asr\model\encoder.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "ec9eb43a01fbfe242a2c6a86050cffe4a31050e1c9f084e98560d6c100004505"
-  !else if "${TARGET}" == "asr\model\frontend.model.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "9d19434b861de0c1d2aff52556911ae565cf3212ebe6d7f797c76c5c5066c2fc"
-  !else if "${TARGET}" == "asr\model\frontend.weights.ort"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "5e4d5471cd5d984d4b94a603d861539ebf1dc72de11b0cf13f38316725d5ce48"
-  !else if "${TARGET}" == "asr\model\streaming_config.json"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "d31afd7c2dd5ee9ae3fa232312c5b42cb3e4fe1c6e9c53d885f2bea63023790a"
-  !else if "${TARGET}" == "asr\model\tokenizer.bin"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "5fbb7d4314dcb18e03c5f975609e4a4cd572b22b01d2b2accb1b3e6830696f36"
-  !else if "${TARGET}" == "asr\ONNX-LICENSE.txt"
+  !if "${TARGET}" == "asr\ONNX-LICENSE.txt"
     !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
-  !else if "${TARGET}" == "asr\NOTICE.txt"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "216ec51b5e71480ea8b1678ca6ad503f8f24f2223153cadd88306690ea56ceb3"
   !else
     File /a "/oname=${TARGET}" "${SOURCE}"
   !endif

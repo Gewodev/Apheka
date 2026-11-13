@@ -36,7 +36,7 @@
     "resources": {
       "bin/yt-dlp-x86_64-pc-windows-msvc.exe": "bin/yt-dlp.exe",
       "bin/ffmpeg-x86_64-pc-windows-msvc.exe": "bin/ffmpeg.exe",
-      "resources/asr/": "asr/"
+      "resources/asr/ONNX-LICENSE.txt": "asr/ONNX-LICENSE.txt"
     },
     "active": true,
     "targets": "all",

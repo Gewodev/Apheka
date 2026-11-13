@@ -20,12 +20,13 @@ El producto vuelve a llamarse **APHEKA** en la aplicación, el ejecutable y el i
 
 ## Peso del instalador
 
-- El peso estaba en las herramientas, no en la app: el ejecutable de APHEKA pesa 13 MB, mientras que el paquete arrastraba ffmpeg (98 MB), **ffprobe (98 MB)** y yt-dlp (17 MB), más 53 MB del dictado local.
-- **ffprobe no se usaba en ningún punto del código**: solo ffmpeg (dictado local y conversión) y yt-dlp (descargas) se ejecutan. Se retiró del paquete, de la firma de herramientas y de las macros del instalador, que ahora verifican únicamente lo que realmente se instala.
-- Resultado: el instalador pasa de **115.485.571 a 88.089.340 bytes** (un 24 % menos) y queda por debajo del límite de 100 MB que impone GitHub, de modo que el instalador vuelve a poder versionarse.
+- El peso estaba en las herramientas y en los modelos, no en la app: el ejecutable de APHEKA pesa 13 MB, mientras el paquete arrastraba ffmpeg (98 MB), **ffprobe (98 MB)**, yt-dlp (17 MB) y los modelos de voz (53 MB).
+- **ffprobe no se usaba en ningún punto del código**: solo ffmpeg (decodificación del audio) y yt-dlp (descargas) se ejecutan. Se retiró del paquete, de la firma de herramientas y de las macros del instalador.
+- **Los modelos de voz tampoco se instalan**: el motor de dictado local se prepara una sola vez bajo demanda, se verifica con la huella del manifiesto y vive en la carpeta de datos. Solo viaja con el instalador el aviso de licencia que exige el runtime. En Ajustes → Sistema aparece «Dictado local en español» con su estado y el botón para prepararlo.
+- El audio se sigue decodificando con ffmpeg, que ya venía incluido: **una sola vía local**, sin procesos ni modelos duplicados.
+- Resultado: el instalador pasa de **115.485.571 a 53.297.989 bytes** (un 54 % menos) y queda muy por debajo del límite de 100 MB de GitHub.
 - La reutilización por SHA-256 se conserva para ffmpeg y yt-dlp: si el binario instalado ya coincide con la huella, el instalador no lo vuelve a escribir.
-- ffmpeg y yt-dlp siguen dentro del paquete para que el dictado local y las descargas funcionen sin conexión; la copia del sistema se usa cuando existe.
-
+- El motor de voz verifica su huella **una sola vez por proceso** (caché por tamaño y fecha): antes se comprobaban 53 MB en cada dictado.
 ## Descargas
 
 - El campo para pegar un enlace deja de estar comprimido: campo amplio con icono, botón para limpiar, texto de ayuda y acción principal separada («Analizar enlace» o «Buscar»).
@@ -94,6 +95,17 @@ Tareas y eventos respetan `event_task`; sesión y descanso respetan `event_pomod
 - Al **cerrar y volver a abrir** la aplicación se conservan la canción, su **posición** (no reinicia en 0) y la **cola** completa, con su orden y su lista de reproducción. La cola guardada manda sobre la lista automática del día: el orden manual nunca se reescribe al arrancar.
 - **Corrección detectada por la prueba:** la duración conocida de la sesión anterior se perdía al reabrir (el progreso se restauraba, la duración no), de modo que la línea de tiempo y el flyout mostraban 0:00. Ahora la duración restaurada se conserva hasta que el medio real informa la suya, y se descarta en cuanto llega la real para que ninguna canción posterior herede una duración ajena.
 - El envío al sistema nativo está serializado: si llega un estado nuevo mientras el anterior está en vuelo, la cola converge en el último y solo se marca como entregado cuando el comando responde, así que un fallo se reintenta en el siguiente ciclo.
+## Fluidez
+
+- El progreso de la música cambia cada segundo y estaba obligando a **reescribir el estado completo** en cada tic: ahora la posición y la duración se guardan aparte, en claves diminutas, y el guardado pesado solo reacciona a cambios reales.
+- El espejo local (copia de seguridad en el navegador) pasa a escribirse con cambios de estructura o cada medio minuto, en lugar de cada diez segundos; el cierre sigue volcando el estado completo al instante.
+- Al reabrir, la posición guardada aparte manda cuando pertenece a la misma canción, así que el punto exacto se conserva sin reescribir nada.
+- El teclado, el reloj y las vistas siguen sin repintados forzados.
+## Reproducción sin avisos molestos
+
+- Cuando una grabación no se puede reproducir (el propietario no la permite en aplicaciones, desaparece o no arranca), la app **busca otra copia pública de la misma canción** y continúa con ella.
+- Si tampoco hay otra copia, se pasa a la **siguiente canción de la cola sin avisar**. El aviso en pantalla queda reservado para el caso en que no queda nada que reproducir.
+- La copia alternativa se verifica con el mismo criterio: título, artista acreditado y duración compatible.
 ## Comprobaciones
 
 - TypeScript sin errores; Rust `cargo check` sin avisos; 46 pruebas nativas correctas, 0 fallidas y 2 omitidas (consulta pública real y listas públicas reales).
@@ -112,8 +124,8 @@ Tareas y eventos respetan `event_task`; sesión y descanso respetan `event_pomod
 
 ## Instalador verificado
 
-`release/apheka_FINAL.exe` · 88089340 bytes · APHEKA 6.27.0.
+`release/apheka_FINAL.exe` · 53297989 bytes · APHEKA 6.27.0.
 
-SHA-256: `ECEEF07DE128DAEE8485F3AE78C5B849AA0015F0EF6DFFD3F9AEFB631BC50193`.
+SHA-256: `777B2A629CE54E3F22A416C7659E96CE57A2010F3CB5EBA40C3391F0E20F58E2`.
 
 Nombre de producto y versión Windows: APHEKA 6.27.0. Fuentes y recursos estables durante la compilación; el ejecutable contiene los recursos actuales del frontend. No se hizo push ni se sustituyó la instalación personal.

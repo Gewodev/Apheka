@@ -93,7 +93,22 @@ export function AppContent() {
   const ytReadyRef=useRef(false);
   const youtubeSourceRef=useRef(youtubeVideoUrl);youtubeSourceRef.current=youtubeVideoUrl;
   const [ytMode, setYtMode] = useState<'api' | 'fallback'>('api');
-  const ytRecovery=useYouTubeRecovery({track:tracks.find(track=>track.id===currentTrackId),url:youtubeVideoUrl,onUrl:setYoutubeVideoUrl,onStop:()=>setIsPlayingMusic(false),onNotice:text=>addNotification(text,'error')});
+  const ytRecovery=useYouTubeRecovery({
+    track:tracks.find(track=>track.id===currentTrackId),
+    url:youtubeVideoUrl,
+    onUrl:setYoutubeVideoUrl,
+    onStop:()=>setIsPlayingMusic(false),
+    onNotice:text=>addNotification(text,'error'),
+    // Cuando una grabacion no se puede reproducir, se busca otra copia y, si
+    // tampoco la hay, se continua con la siguiente cancion sin molestar.
+    onFallback:()=>{
+      const result=nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
+      if(!result.id||result.id===currentTrackId)return false;
+      setMusicQueue(result.queue);
+      playTrack(result.id,true);
+      return true;
+    },
+  });
   const musicVolumeRef=useRef(musicVolume);musicVolumeRef.current=musicVolume;
   const isPlayingMusicRef = useRef(isPlayingMusic);
   isPlayingMusicRef.current = isPlayingMusic;

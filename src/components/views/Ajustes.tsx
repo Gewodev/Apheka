@@ -42,6 +42,7 @@ import {
 import { isTauri } from '../../lib/tauri';
 import { exportOwaBackup, pickAndImportOwaBackup, importOwaBackupFromFile, getOwaDataFolder, revealOwaDataFolder } from '../../lib/owaBackup';
 import ToolsRepairCard from '../ui/ToolsRepairCard';
+import LocalDictationCard from '../ui/LocalDictationCard';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
@@ -1117,6 +1118,7 @@ export default function Ajustes() {
                 </div>
 
                 <ToolsRepairCard />
+                <LocalDictationCard />
 
                 {/* Import / Export metadata */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>

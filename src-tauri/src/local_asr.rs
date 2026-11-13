@@ -13,7 +13,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tauri::Manager;
 static JOBS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
 fn jobs() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
     JOBS.get_or_init(Default::default)
@@ -133,18 +132,23 @@ pub async fn charvis_local_transcribe(
         if bytes.is_empty() || bytes.len() > 18 * 1024 * 1024 {
             return Err("La grabación está vacía o es demasiado grande.".into());
         }
-        let root = app
-            .path()
-            .resource_dir()
-            .map_err(|_| "No se encontró el dictado local.")?
-            .join("asr");
-        let root = if root.is_dir() {
-            root
-        } else if cfg!(debug_assertions) {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/asr")
-        } else {
-            return Err("Reinstala APHEKA para recuperar el dictado local.".into());
-        };
+        // El dictado local se prepara una vez (descarga verificada) y vive en la
+        // carpeta de datos. La copia que traia el instalador sigue siendo valida.
+        let roots = crate::asr_setup::asr_roots(&app);
+        let root = roots
+            .iter()
+            .find(|root| root.join("model").join("decoder_kv.ort").is_file())
+            .cloned()
+            .or_else(|| {
+                if cfg!(debug_assertions) {
+                    Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/asr"))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                "El dictado local no esta preparado. Preparalo en Ajustes -> Sistema.".to_string()
+            })?;
         let temp_path = std::env::temp_dir().join(format!("apheka-asr-{id}"));
         std::fs::create_dir(&temp_path).map_err(|_| "No se pudo preparar el audio.")?;
         let temp = TempAudio(temp_path);
@@ -201,33 +205,6 @@ pub async fn charvis_local_transcribe(
     }
     result
 }
-fn verify(root: &Path) -> Result<(), String> {
-    use sha2::{Digest, Sha256};
-    let manifest: Value = serde_json::from_str(include_str!("../asr-manifest.json"))
-        .map_err(|_| "Manifiesto de dictado no válido.")?;
-    for entry in manifest["files"]
-        .as_array()
-        .ok_or("Manifiesto incompleto.")?
-    {
-        let path = root.join(entry["file"].as_str().ok_or("Recurso no válido.")?);
-        let mut file = std::fs::File::open(path).map_err(|_| "Faltan recursos del dictado.")?;
-        let mut hash = Sha256::new();
-        let mut buf = [0u8; 65536];
-        loop {
-            let n = file
-                .read(&mut buf)
-                .map_err(|_| "No se pudo verificar el dictado.")?;
-            if n == 0 {
-                break;
-            }
-            hash.update(&buf[..n]);
-        }
-        if format!("{:x}", hash.finalize()) != entry["sha256"].as_str().unwrap_or("") {
-            return Err("Un recurso del dictado está dañado. Reinstala APHEKA.".into());
-        }
-    }
-    Ok(())
-}
 #[repr(C)]
 struct Line {
     text: *const c_char,
@@ -249,7 +226,7 @@ struct Transcript {
     count: u64,
 }
 fn transcribe(root: &Path, pcm: &Path) -> Result<Value, String> {
-    verify(root)?;
+    crate::asr_setup::verify_roots(std::slice::from_ref(&root.to_path_buf()))?;
     let bytes = std::fs::read(pcm).map_err(|_| "Audio no disponible.")?;
     if bytes.is_empty() || bytes.len() % 4 != 0 || bytes.len() > 180 * 16000 * 4 {
         return Err("Audio fuera de límites.".into());

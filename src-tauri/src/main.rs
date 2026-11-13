@@ -18,6 +18,7 @@ mod workspace_pointer;
 mod floating_timer;
 mod media_controls;
 mod app_update;
+mod asr_setup;
 mod rendering;
 mod release_notice;
 mod mcp;
@@ -848,6 +849,7 @@ fn main() {
             floating_timer::toggle_floating_timer, floating_timer::close_floating_timer,
             media_controls::media_controls_update, media_controls::media_controls_clear,
             app_update::update_state, app_update::relaunch_app, app_update::apply_update,
+            asr_setup::asr_status, asr_setup::asr_prepare,
             rendering::graphics_status, rendering::graphics_set_mode,
             download_yt_dlp,
         ])
