@@ -42,3 +42,8 @@ Thumbs.db
 
 # Reproducible offline dictation assets (scripts/prepare-local-asr.py)
 src-tauri/resources/asr/
+
+# Los instaladores se conservan en disco y se documentan con su SHA-256 en
+# docs/APHEKA-release-*.json. Esta conexion corta las subidas grandes
+# (HTTP 408), asi que no se versionan.
+release/*.exe
