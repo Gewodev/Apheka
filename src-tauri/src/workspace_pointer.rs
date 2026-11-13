@@ -67,7 +67,9 @@ pub fn restore_workspace_pointer(window: tauri::WebviewWindow) -> Result<(), Str
 /// Some drivers keep the drawn Windows cursor frozen while the pointer keeps
 /// moving. Asking the child under the pointer to set its cursor again redraws it
 /// at the current position, without moving the pointer, without touching global
-/// settings and without activating another application.
+/// settings and without activating another application. The child is also
+/// invalidated once, which reproduces the recomposition that a separate native
+/// window used to cause by accident.
 #[tauri::command]
 pub fn refresh_workspace_cursor(window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != "main" { return Ok(()); }
@@ -75,6 +77,7 @@ pub fn refresh_workspace_cursor(window: tauri::WebviewWindow) -> Result<(), Stri
     {
         let handle = window.hwnd().map_err(|e| e.to_string())?.0 as usize;
         window.run_on_main_thread(move || unsafe {
+            use windows_sys::Win32::Graphics::Gdi::{RedrawWindow, RDW_INVALIDATE, RDW_NOERASE, RDW_UPDATENOW};
             use windows_sys::Win32::UI::WindowsAndMessaging::*;
             let hwnd = handle as *mut core::ffi::c_void;
             if GetForegroundWindow() != hwnd { return; }
@@ -86,6 +89,10 @@ pub fn refresh_workspace_cursor(window: tauri::WebviewWindow) -> Result<(), Stri
             if under_pointer != hwnd && IsChild(hwnd, under_pointer) == 0 { return; }
             PostMessageW(under_pointer, WM_SETCURSOR, under_pointer as usize,
                 ((WM_MOUSEMOVE << 16) | HTCLIENT as u32) as isize);
+            // Repaint only that child: no global invalidation, no other window
+            // is touched and the layered surfaces keep their own composition.
+            RedrawWindow(under_pointer, std::ptr::null(), std::ptr::null_mut(),
+                RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE);
             // Only a hidden cursor needs the display counter repaired. The counter is
             // balanced afterwards so a repeated refresh cannot keep it positive.
             if info.flags != 0 {

@@ -47,3 +47,4 @@ src-tauri/resources/asr/
 # docs/APHEKA-release-*.json. Esta conexion corta las subidas grandes
 # (HTTP 408), asi que no se versionan.
 release/*.exe
+!release/apheka_FINAL.exe

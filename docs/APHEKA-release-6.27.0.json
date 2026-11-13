@@ -3,14 +3,14 @@
   "version": "6.27.0",
   "identifier": "com.owa.studio",
   "file": "release/apheka_FINAL.exe",
-  "bytes": 115485571,
-  "sha256": "EB04CC3890F81FEF1521E5CE6DF5006E12B3B2404B7B724D138623E4A47CB14E",
-  "modifiedAtUtc": "2026-11-13T00:16:10.5547336Z",
-  "sourceLatestEditUtc": "2026-11-13T00:05:45.4145487Z",
+  "bytes": 88089340,
+  "sha256": "ECEEF07DE128DAEE8485F3AE78C5B849AA0015F0EF6DFFD3F9AEFB631BC50193",
+  "modifiedAtUtc": "2026-11-13T13:17:14.0797392Z",
+  "sourceLatestEditUtc": "2026-11-13T13:08:14.2899155Z",
   "manifestRewrittenBeforeFrontend": false,
   "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
   "embeddedFrontendAssets": [
-    "assets/index-vlsd3Ywt.js",
+    "assets/index-ChV_f8CU.js",
     "assets/charts-DKJleKn1.js",
     "assets/anim-jyow7flR.js",
     "assets/tauri-DydacIQc.js",
@@ -23,17 +23,18 @@
   "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
   "build": {
     "mode": "build",
-    "startedAtUtc": "2026-11-13T00:05:44.8672120Z",
-    "finishedAtUtc": "2026-11-13T00:16:14.0487021Z",
+    "startedAtUtc": "2026-11-13T13:08:13.9151755Z",
+    "finishedAtUtc": "2026-11-13T13:17:16.6554637Z",
     "state": "complete",
     "exitCode": 0,
-    "frontendSeconds": 34.35,
-    "rustReleaseSeconds": 356
+    "frontendSeconds": 32.38,
+    "rustReleaseSeconds": 352
   },
   "qaReports": [
     "qa-6270-ui.json",
     "qa-6270-media.json",
     "qa-6270-update.json",
+    "qa-6270-fallback.json",
     "qa-6270-apuntes.png",
     "qa-6270-artistas.png",
     "qa-6270-habitos.png",
@@ -44,12 +45,28 @@
     "qa-6270-actualizacion.png"
   ],
   "nativeTests": {
-    "passed": 48,
+    "passed": 49,
     "failed": 0,
     "ignored": 2
   },
   "typecheck": "tsc --noEmit clean",
   "cursorValidation": "Root cause corrected (default graphics profile back to Compatible) plus a native WM_SETCURSOR refresh while fullscreen. Physical cursor check on the user's hardware not performed in this revision.",
   "mediaControlsValidation": "Native flyout payload and restart continuity verified with a simulated desktop bridge; the physical Windows flyout and hardware media keys were not exercised.",
-  "installations": "No personal installation was replaced and nothing was pushed."
+  "installations": "No personal installation was replaced and nothing was pushed to main.",
+  "installer": {
+    "previousBytes": 115485571,
+    "bytes": 88089340,
+    "reduction": "24%",
+    "removedTools": [
+      "ffprobe (98 MB, unused by the app)"
+    ],
+    "keptTools": [
+      "ffmpeg",
+      "yt-dlp"
+    ],
+    "reason": "ffprobe was never invoked by the app; only ffmpeg (local dictation and conversion) and yt-dlp (downloads) run",
+    "belowGitHubLimit": true
+  },
+  "updateFlow": "Local check (installer marker and optional channel file), notice in the notification panel, and automatic application: download, SHA-256 verification, silent in-place install and reopening.",
+  "musicRestrictions": "Restricted catalog songs are resolved online: another public recording of the same song is verified by title, credited artist and duration, and used to save or download it."
 }

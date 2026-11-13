@@ -18,6 +18,14 @@ El producto vuelve a llamarse **APHEKA** en la aplicación, el ejecutable y el i
 - La selección sigue guardada entre reinicios, igual que el resto de preferencias del reproductor. El botón de repetición muestra el «1» activo y su estado real se comprobó en la interfaz.
 - Se eliminó un contador interno que ya no se usaba, para que el estado del bucle tenga una sola fuente de verdad.
 
+## Peso del instalador
+
+- El peso estaba en las herramientas, no en la app: el ejecutable de APHEKA pesa 13 MB, mientras que el paquete arrastraba ffmpeg (98 MB), **ffprobe (98 MB)** y yt-dlp (17 MB), más 53 MB del dictado local.
+- **ffprobe no se usaba en ningún punto del código**: solo ffmpeg (dictado local y conversión) y yt-dlp (descargas) se ejecutan. Se retiró del paquete, de la firma de herramientas y de las macros del instalador, que ahora verifican únicamente lo que realmente se instala.
+- Resultado: el instalador pasa de **115.485.571 a 88.089.340 bytes** (un 24 % menos) y queda por debajo del límite de 100 MB que impone GitHub, de modo que el instalador vuelve a poder versionarse.
+- La reutilización por SHA-256 se conserva para ffmpeg y yt-dlp: si el binario instalado ya coincide con la huella, el instalador no lo vuelve a escribir.
+- ffmpeg y yt-dlp siguen dentro del paquete para que el dictado local y las descargas funcionen sin conexión; la copia del sistema se usa cuando existe.
+
 ## Descargas
 
 - El campo para pegar un enlace deja de estar comprimido: campo amplio con icono, botón para limpiar, texto de ayuda y acción principal separada («Analizar enlace» o «Buscar»).
@@ -64,20 +72,28 @@ Tareas y eventos respetan `event_task`; sesión y descanso respetan `event_pomod
 ## Aviso de actualización
 
 - Cuando hay una versión nueva, el aviso aparece **arriba, en Notificaciones**, con la versión exacta y una acción para aplicarla.
-- La comprobación es local y no depende de la red: el instalador deja la marca de la versión que se instaló (`apheka-installed.txt`) y la app la compara con la versión que estí en marcha. Si la instalada es mís nueva, el aviso ofrece **Reiniciar ahora** para usar esa versión.
-- También se admite un canal publicado en la carpeta de datos (`update-channel.json` con `version`, `url` y `notes`): si la versión del canal es superior, el aviso ofrece **Descargar**.
-- La comprobación se hace al arrancar, cada seis horas y al volver a la ventana, con un lÃ­mite de cinco minutos entre intentos. La misma versión se anuncia **una sola vez**.
-- En Ajustes â†’ Sistema â†’ Â«Sobre APHEKAÂ» hay un botón **Buscar actualizaciones** que fuerza la comprobación y deja el resultado en las notificaciones. Si no hay novedades, se responde Â«No hay actualizaciones disponiblesÂ».
+- La comprobación es local y no depende de la red: el instalador deja la marca de la versión que se instaló (`apheka-installed.txt`) y la app la compara con la versión que está en marcha. Si la instalada es más nueva, el aviso ofrece **Reiniciar ahora** para usar esa versión.
+- También se admite un canal publicado en la carpeta de datos (`update-channel.json` con `version`, `url`, `sha256` y `notes`). Con esa huella publicada la app **aplica la actualización sola**: descarga el instalador, verifica el SHA-256, lo ejecuta en silencio con la actualización sobre la instalación actual y vuelve a abrir la aplicación. Si la huella no coincide, no se instala nada y se avisa.
+- Sin HTTPS o sin huella verificable la app no instala nada: solo ofrece el enlace de descarga.
+- La comprobación se hace al arrancar, cada seis horas y al volver a la ventana, con un límite de cinco minutos entre intentos. La misma versión se anuncia **una sola vez**.
+- En Ajustes → Sistema → «Sobre APHEKA» hay un botón **Buscar actualizaciones** que fuerza la comprobación y deja el resultado en las notificaciones. Si no hay novedades, se responde «No hay actualizaciones disponibles».
 - Ninguna comprobación puede romper la app: si falta el archivo, no se puede leer o la versión no se conoce, no se muestra ningún aviso.
+
+**Límite de validación:** no se probó físicamente el flyout de Windows ni las teclas multimedia de hardware en esta revisión. La coherencia del envío y la continuidad tras reiniciar se comprobaron con un puente de escritorio simulado que registra cada llamada nativa.
+
+## Canciones restringidas en Descubrir
+
+- Cuando el catálogo marca una canción como no descargable (el autor no permite su uso fuera de la app), la app **busca otra copia en internet**: consulta el catálogo musical por título y artista y acepta solo una grabación pública de la misma canción.
+- La identidad se verifica siempre: título sin los adornos habituales («official», «lyrics», «remastered»), artista acreditado y duración compatible (±8 s o ±12 %). Una canción con el mismo título de otro artista no se acepta.
+- La copia alternativa se usa para **guardar** la canción y para **descargarla**; la grabación bloqueada no se reutiliza nunca. Si no hay ninguna copia disponible, el aviso lo dice con claridad.
+- El mismo criterio se aplica cuando una grabación de YouTube deja de ser reproducible dentro de la app (errores 100/101/150): se busca otra grabación pública de la misma canción.
+
 ## Continuidad de la música
 
 - El flyout native **refleja la canción que está sonando**: se verificó que recibe el título, el artista, el álbum, la carátula, la duración, la posición y si puede avanzar o retroceder, y que cambia al cambiar de canción. La sesión no se limpia mientras haya una canción cargada.
 - Al **cerrar y volver a abrir** la aplicación se conservan la canción, su **posición** (no reinicia en 0) y la **cola** completa, con su orden y su lista de reproducción. La cola guardada manda sobre la lista automática del día: el orden manual nunca se reescribe al arrancar.
 - **Corrección detectada por la prueba:** la duración conocida de la sesión anterior se perdía al reabrir (el progreso se restauraba, la duración no), de modo que la línea de tiempo y el flyout mostraban 0:00. Ahora la duración restaurada se conserva hasta que el medio real informa la suya, y se descarta en cuanto llega la real para que ninguna canción posterior herede una duración ajena.
 - El envío al sistema nativo está serializado: si llega un estado nuevo mientras el anterior está en vuelo, la cola converge en el último y solo se marca como entregado cuando el comando responde, así que un fallo se reintenta en el siguiente ciclo.
-
-**Límite de validación:** no se probó físicamente el flyout de Windows ni las teclas multimedia de hardware en esta revisión. La coherencia del envío y la continuidad tras reiniciar se comprobaron con un puente de escritorio simulado que registra cada llamada nativa.
-
 ## Comprobaciones
 
 - TypeScript sin errores; Rust `cargo check` sin avisos; 46 pruebas nativas correctas, 0 fallidas y 2 omitidas (consulta pública real y listas públicas reales).
@@ -96,8 +112,8 @@ Tareas y eventos respetan `event_task`; sesión y descanso respetan `event_pomod
 
 ## Instalador verificado
 
-`release/apheka_FINAL.exe` · 115485571 bytes · APHEKA 6.27.0.
+`release/apheka_FINAL.exe` · 88089340 bytes · APHEKA 6.27.0.
 
-SHA-256: `EB04CC3890F81FEF1521E5CE6DF5006E12B3B2404B7B724D138623E4A47CB14E`.
+SHA-256: `ECEEF07DE128DAEE8485F3AE78C5B849AA0015F0EF6DFFD3F9AEFB631BC50193`.
 
 Nombre de producto y versión Windows: APHEKA 6.27.0. Fuentes y recursos estables durante la compilación; el ejecutable contiene los recursos actuales del frontend. No se hizo push ni se sustituyó la instalación personal.

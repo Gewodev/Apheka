@@ -1,4 +1,3 @@
-; Generated from the three bundled binaries. No runtime installation or download.
+; Generated from the bundled binaries. No runtime installation or download.
 !define APHEKA_FFMPEG_SHA256 "72a489eccd008c2ec2c0a5856c5c75bc3d8bbfa90166c4566865c246445e6aa3"
-!define APHEKA_FFPROBE_SHA256 "19202b23c0043f15ad1b7bce2344f406fd52bd6efd8f995ce02e7392a1cec52f"
 !define APHEKA_YTDLP_SHA256 "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"

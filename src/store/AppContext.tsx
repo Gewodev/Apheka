@@ -476,7 +476,7 @@ export interface AppNotification {
   type: 'success' | 'error' | 'info';
   timestamp: number;
   /** Optional action offered by the notification, such as updating the app. */
-  action?: { label: string; kind: 'relaunch' | 'open-url'; url?: string };
+  action?: { label: string; kind: 'relaunch' | 'open-url' | 'update'; url?: string; sha256?: string };
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

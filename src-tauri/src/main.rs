@@ -847,7 +847,7 @@ fn main() {
             workspace_pointer::refresh_workspace_cursor,
             floating_timer::toggle_floating_timer, floating_timer::close_floating_timer,
             media_controls::media_controls_update, media_controls::media_controls_clear,
-            app_update::update_state, app_update::relaunch_app,
+            app_update::update_state, app_update::relaunch_app, app_update::apply_update,
             rendering::graphics_status, rendering::graphics_set_mode,
             download_yt_dlp,
         ])

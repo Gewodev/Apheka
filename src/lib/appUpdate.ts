@@ -1,17 +1,20 @@
 /**
  * Update notices for the desktop app.
  *
- * The check never touches the network and never breaks the app: it compares the
- * version of the installer that ran on this machine (and an optional published
- * channel file) with the version that is running.
+ * The check never breaks the app: it compares the version of the installer that
+ * ran on this machine (and an optional published channel file) with the version
+ * that is running. When the channel publishes a fingerprint, the update can be
+ * applied by the app itself: download, verification, silent installation and
+ * reopening.
  */
 
 import {invoke, isTauri} from './tauri';
 
 export interface UpdateAction {
   label: string;
-  kind: 'relaunch' | 'open-url';
+  kind: 'relaunch' | 'open-url' | 'update';
   url?: string;
+  sha256?: string;
 }
 
 export interface UpdateFinding {
@@ -24,7 +27,7 @@ export interface UpdateFinding {
 
 interface UpdateState {
   installed?: string | null;
-  channel?: { version: string; url?: string | null; notes?: string | null } | null;
+  channel?: { version: string; url?: string | null; sha256?: string | null; notes?: string | null } | null;
 }
 
 /** Compare dotted versions: 1 when a is newer, -1 when b is newer, 0 when equal. */
@@ -60,12 +63,19 @@ export async function checkAppUpdate(currentVersion: string): Promise<UpdateFind
     const channel = state?.channel;
     if (channel?.version && compareVersions(channel.version, currentVersion) > 0) {
       const url = channel.url?.trim();
+      const sha256 = channel.sha256?.trim();
+      const version = channel.version.trim();
+      const action: UpdateAction | undefined = url && sha256
+        ? {label: 'Actualizar ahora', kind: 'update', url, sha256}
+        : url
+          ? {label: 'Descargar', kind: 'open-url', url}
+          : undefined;
       return {
-        version: channel.version.trim(),
+        version,
         kind: 'channel',
         notes: channel.notes?.trim() || undefined,
-        message: `Hay una actualización disponible: APHEKA ${channel.version.trim()}.`,
-        action: url ? {label: 'Descargar', kind: 'open-url', url} : undefined,
+        message: `Hay una actualización disponible: APHEKA ${version}.`,
+        action,
       };
     }
     return null;
@@ -82,5 +92,20 @@ export async function relaunchApp(): Promise<void> {
     await invoke('relaunch_app');
   } catch {
     // Ignore: the user can restart the app by hand.
+  }
+}
+
+/**
+ * Apply a published update by itself: download, verify the published
+ * fingerprint, install silently and reopen the app.
+ */
+export async function applyUpdate(url: string, sha256: string): Promise<{ ok: boolean; message: string }> {
+  if (!isTauri()) return {ok: false, message: 'La actualización necesita la aplicación de escritorio.'};
+  try {
+    await invoke('apply_update', {url, sha256});
+    return {ok: true, message: 'Actualización en marcha. La aplicación se abrirá de nuevo al terminar.'};
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error).replace(/^Error:\s*/, '');
+    return {ok: false, message: message || 'No se pudo aplicar la actualización.'};
   }
 }

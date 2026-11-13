@@ -36,7 +36,6 @@
     "resources": {
       "bin/yt-dlp-x86_64-pc-windows-msvc.exe": "bin/yt-dlp.exe",
       "bin/ffmpeg-x86_64-pc-windows-msvc.exe": "bin/ffmpeg.exe",
-      "bin/ffprobe-x86_64-pc-windows-msvc.exe": "bin/ffprobe.exe",
       "resources/asr/": "asr/"
     },
     "active": true,

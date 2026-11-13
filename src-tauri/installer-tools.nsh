@@ -38,8 +38,6 @@ ${StrStr}
 !macro APHEKA_RESOURCE_FILE SOURCE TARGET
   !if "${TARGET}" == "bin\ffmpeg.exe"
     !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "${APHEKA_FFMPEG_SHA256}"
-  !else if "${TARGET}" == "bin\ffprobe.exe"
-    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "${APHEKA_FFPROBE_SHA256}"
   !else if "${TARGET}" == "bin\yt-dlp.exe"
     !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "${APHEKA_YTDLP_SHA256}"
   !else

@@ -17,7 +17,7 @@
 //
 // Variables opcionales: OPENROUTER_URL, HTTP_REFERER, X_TITLE.
 
-const VERSION = 'v12';
+const VERSION = 'v13';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -26,6 +26,22 @@ const CORS = {
   'access-control-allow-methods': 'GET,POST,OPTIONS',
   'access-control-allow-headers': 'content-type,authorization,x-api-key,anthropic-version,anthropic-beta,x-proxy-token',
 };
+
+const FALLBACK_GEMINI_MODELS = [
+  'gemini-4-carbon',
+  'gemini-4-argon',
+  'gemini-4-hydrogen',
+  'gemini-3.8-flash',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-pro-latest',
+  'gemini-flash-latest',
+];
+
+function getGeminiApiKey(env) {
+  return String(env.GEMINI_API_KEY || '').trim();
+}
 
 let modelsCache = { at: 0, data: null };
 
@@ -82,8 +98,12 @@ function clientToken(request) {
 }
 
 function checkAuth(request, env) {
-  if (!env.PROXY_TOKEN) return true; // modo abierto si no se configuro secreto
-  return clientToken(request) === String(env.PROXY_TOKEN).trim();
+  const rawExpected = String(env.PROXY_TOKEN || '').trim();
+  if (!rawExpected) return true; // modo abierto si no se configuro secreto
+  const token = clientToken(request);
+  if (!token) return false;
+  const allowed = rawExpected.split(/[,;\s]+/).map((t) => t.split('|')[0].trim()).filter(Boolean);
+  return allowed.includes(token) || rawExpected === token || rawExpected.split('|')[0].trim() === token;
 }
 
 function isGemini(model) {
@@ -94,11 +114,11 @@ function isGemini(model) {
 // Modelos
 // ---------------------------------------------------------------------------
 async function fetchGeminiModels(env) {
-  if (!env.GEMINI_API_KEY) return [];
+  if (!getGeminiApiKey(env)) return [];
   const now = Date.now();
   if (modelsCache.data && now - modelsCache.at < 3600_000) return modelsCache.data;
   const res = await fetch(GEMINI_BASE + '/models?pageSize=1000', {
-    headers: { 'x-goog-api-key': env.GEMINI_API_KEY },
+    headers: { 'x-goog-api-key': getGeminiApiKey(env) },
   });
   if (!res.ok) return [];
   const body = await res.json();
@@ -125,7 +145,7 @@ async function handleMessages(request, env) {
   const stream = body.stream === true;
 
   if (isGemini(model)) {
-    if (!env.GEMINI_API_KEY) {
+    if (!getGeminiApiKey(env)) {
       return json({ type: 'error', error: { type: 'authentication_error', message: 'Falta el secreto GEMINI_API_KEY en el Worker.' } }, 500);
     }
     return stream ? geminiStream(body, env) : geminiOnce(body, env);
@@ -149,14 +169,14 @@ async function handleCountTokens(request, env) {
   const body = await request.json();
   const model = body.model || '';
   const approx = estimateTokens(body);
-  if (isGemini(model) && env.GEMINI_API_KEY) {
+  if (isGemini(model) && getGeminiApiKey(env)) {
     try {
       const payload = { contents: toGeminiContents(body) };
       const sys = flattenText(body.system);
       if (sys) payload.systemInstruction = { parts: [{ text: sys }] };
       const res = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:countTokens`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -237,6 +257,9 @@ function toGeminiContents(body) {
     }
     pushTurn('user', parts.length ? parts : [{ text: '' }]);
   }
+  if (contents.length && contents[0].role === 'model') {
+    contents.unshift({ role: 'user', parts: [{ text: '' }] });
+  }
   return contents;
 }
 
@@ -273,12 +296,55 @@ function toGeminiTools(body) {
   return declarations.length ? [{ functionDeclarations: declarations }] : undefined;
 }
 
+const GEMINI_SCHEMA_ALLOWED_KEYS = new Set([
+  'type', 'format', 'description', 'nullable', 'enum',
+  'maxItems', 'minItems', 'properties', 'required', 'items', 'anyOf'
+]);
+
 function sanitizeSchema(schema) {
   if (!schema || typeof schema !== 'object') return { type: 'object', properties: {} };
-  const clone = JSON.parse(JSON.stringify(schema));
-  clone.type = clone.type || 'object';
-  for (const key of ['$schema', 'additionalProperties', '$id', '$ref', 'definitions', '$defs']) delete clone[key];
-  return clone;
+  if (Array.isArray(schema)) return schema.map(sanitizeSchema);
+
+  const out = {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (!GEMINI_SCHEMA_ALLOWED_KEYS.has(k) && k !== 'allOf' && k !== 'oneOf') continue;
+
+    if (k === 'properties' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const props = {};
+      for (const [pk, pv] of Object.entries(v)) {
+        props[pk] = sanitizeSchema(pv);
+      }
+      out.properties = props;
+    } else if (k === 'items') {
+      out.items = Array.isArray(v) ? (v[0] ? sanitizeSchema(v[0]) : { type: 'string' }) : sanitizeSchema(v);
+    } else if (k === 'required') {
+      if (Array.isArray(v)) {
+        const reqs = v.filter((x) => typeof x === 'string');
+        if (reqs.length) out.required = reqs;
+      }
+    } else if (k === 'enum') {
+      if (Array.isArray(v)) out.enum = v.map(String);
+    } else if (k === 'anyOf' || k === 'oneOf' || k === 'allOf') {
+      if (Array.isArray(v)) out.anyOf = v.map(sanitizeSchema);
+    } else if (k === 'type') {
+      out.type = typeof v === 'string' ? v.toLowerCase() : 'object';
+    } else if (GEMINI_SCHEMA_ALLOWED_KEYS.has(k)) {
+      out[k] = v;
+    }
+  }
+
+  if (!out.type && !out.anyOf) {
+    if (out.properties) out.type = 'object';
+    else if (out.items) out.type = 'array';
+    else out.type = 'string';
+  }
+  if (out.type === 'object' && !out.properties && !out.anyOf) {
+    out.properties = {};
+  }
+  if (out.type === 'array' && !out.items) {
+    out.items = { type: 'string' };
+  }
+  return out;
 }
 
 function buildGeminiRequest(body) {
@@ -304,7 +370,7 @@ async function geminiOnce(body, env) {
   const model = body.model;
   const res = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
     body: JSON.stringify(buildGeminiRequest(body)),
   });
   const data = await res.json();
@@ -346,7 +412,7 @@ async function geminiStream(body, env) {
   const model = body.model;
   const upstream = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
     body: JSON.stringify(buildGeminiRequest(body)),
   });
   if (!upstream.ok) {

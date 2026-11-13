@@ -22,7 +22,7 @@ function Get-SourceSignature {
   return [string]::Join("`n", @($files | Sort-Object | ForEach-Object { $_ + ':' + (Get-ArtifactSha256 (Join-Path $repo $_)) }))
 }
 function Get-ToolSignature {
-  $entries=@('ffmpeg','ffprobe','yt-dlp') | ForEach-Object {
+  $entries=@('ffmpeg','yt-dlp') | ForEach-Object {
     $_ + ':' + (Get-ArtifactSha256 (Join-Path $repo "src-tauri/bin/$_-x86_64-pc-windows-msvc.exe"))
   }
   return [string]::Join("`n",$entries)

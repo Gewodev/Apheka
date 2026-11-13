@@ -1,0 +1,32 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('C:/Users/USER/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});const report={steps:[],errors:[]},errors=[];let page;const step=async(name,fn)=>{await fn();report.steps.push(name);fs.writeFileSync('release/qa-6270-fallback.json',JSON.stringify({...report,errors},null,2));console.log('PASS',name);};
+try{page=await browser.newPage({viewport:{width:1280,height:800}});page.on('pageerror',e=>report.errors.push(e.message));
+await page.goto('http://127.0.0.1:1426/scripts/runtime-6267.html');await page.waitForFunction(()=>!!window.__qaApp);
+await step('the same song is recognised and a different one is not',async()=>{
+ const result=await page.evaluate(async()=>{const m=await import('/src/lib/musicFallback.ts');
+  const wanted={title:'Nothing Else Matters',artist:'Metallica',duration:384};
+  const same=m.matchesSameSong({title:'Nothing Else Matters (Official Video)',artist:'Metallica',duration:384},wanted);
+  const different=m.matchesSameSong({title:'Enter Sandman',artist:'Metallica',duration:382},wanted);
+  const otherArtist=m.matchesSameSong({title:'Nothing Else Matters',artist:'Nhạc trẻ',duration:384},wanted);
+  const collab=m.matchesSameSong({title:'Nothing Else Matters',artist:'Metallica feat. Someone',duration:385},wanted);
+  const wrongDuration=m.matchesSameSong({title:'Nothing Else Matters',artist:'Metallica',duration:120},wanted);
+  return {same,different,otherArtist,collab,wrongDuration};});
+ assert.equal(result.same,'exact',JSON.stringify(result));
+ assert.equal(result.different,false,JSON.stringify(result));
+ assert.equal(result.otherArtist,false,JSON.stringify(result));
+ assert.equal(result.collab,'loose',JSON.stringify(result));
+ assert.equal(result.wrongDuration,false,JSON.stringify(result));
+});
+await step('the best available copy is chosen and blocked ones are skipped',async()=>{
+ const result=await page.evaluate(async()=>{const m=await import('/src/lib/musicFallback.ts');
+  const candidates=[{id:'aaaaaaaaaaa',title:'Nothing Else Matters',artist:'Metallica',duration:384,cover:'x'},{id:'bbbbbbbbbbb',title:'Nothing Else Matters',artist:'Metallica feat. Guest',duration:384,cover:'x'},{id:'ccccccccccc',title:'Another One',artist:'Metallica',duration:300,cover:'x'}];
+  const wanted={title:'Nothing Else Matters',artist:'Metallica',duration:384};
+  const best=m.pickAlternative(candidates,wanted);
+  const skipped=m.pickAlternative(candidates,wanted,new Set(['aaaaaaaaaaa']));
+  const none=m.pickAlternative(candidates,{title:'Song That Does Not Exist',artist:'Nobody',duration:100});
+  return {best:best?.id,skipped:skipped?.id,none:none?.id??null};});
+ assert.equal(result.best,'aaaaaaaaaaa',JSON.stringify(result));
+ assert.equal(result.skipped,'bbbbbbbbbbb',JSON.stringify(result));
+ assert.equal(result.none,null,JSON.stringify(result));
+});
+assert.deepEqual(report.errors,[]);fs.writeFileSync('release/qa-6270-fallback.json',JSON.stringify(report,null,2));}catch(e){if(page)await page.screenshot({path:'release/qa-6270-fallback-failure.png'});throw e;}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});

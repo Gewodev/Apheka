@@ -1,0 +1,7 @@
+{
+  "steps": [
+    "the same song is recognised and a different one is not",
+    "the best available copy is chosen and blocked ones are skipped"
+  ],
+  "errors": []
+}

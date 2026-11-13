@@ -4,7 +4,7 @@ const stub=()=>{
   window.__TAURI_INTERNALS__={
     invoke:async(command,args)=>{
       window.__nativeCalls.push({command,args});
-      if(command==='update_state')return {installed:'6.28.0',channel:null};
+      if(command==='update_state')return {installed:null,channel:{version:'6.28.0',url:'https://example.test/apheka-6.28.0.exe',sha256:'a'.repeat(64),notes:'Notas de la version'}};
       if(String(command).includes('version'))return '6.27.0';
       return null;
     },
@@ -31,15 +31,18 @@ await step('a newer build raises a notice in the notification panel',async()=>{
  await item.waitFor();
  const text=await item.innerText();
  assert.ok(text.includes('6.28.0'),text);
- assert.ok(text.includes('Reiniciar'),text);
+ assert.ok(text.includes('Actualizar'),text);
  await page.screenshot({path:'release/qa-6270-actualizacion.png'});
 });
 await step('the notice offers the update action and runs it',async()=>{
  const action=page.locator('.notification-action').first();
  await action.waitFor();
- assert.equal((await action.innerText()).trim(),'Reiniciar ahora');
+ assert.equal((await action.innerText()).trim(),'Actualizar ahora');
  await action.click();
- await page.waitForFunction(()=>window.__nativeCalls.some(c=>c.command==='relaunch_app'),null,{timeout:8000});
+ await page.waitForFunction(()=>window.__nativeCalls.some(c=>c.command==='apply_update'),null,{timeout:8000});
+ const call=await page.evaluate(()=>window.__nativeCalls.find(c=>c.command==='apply_update'));
+ assert.equal(call.args.url,'https://example.test/apheka-6.28.0.exe');
+ assert.equal(call.args.sha256,'a'.repeat(64));
 });
 await step('the same version is not announced twice',async()=>{
  const before=await page.evaluate(()=>window.__nativeCalls.filter(c=>c.command==='update_state').length);
