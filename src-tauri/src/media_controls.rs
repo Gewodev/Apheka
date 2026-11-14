@@ -109,6 +109,19 @@ mod platform {
     }
 
     fn create(hwnd: usize, app: &tauri::AppHandle) -> Option<Session> {
+        // Asegurar que el AppUserModelId esté configurado antes de crear el SMTC,
+        // para que Windows muestre "West" (no "aplicación desconocida") en el
+        // flyout de medios y en las notificaciones del reproductor.
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+            let mut id: Vec<u16> = crate::windows_identity::APP_USER_MODEL_ID
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
+            let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(id.as_ptr()) };
+        }
+
         let interop: ISystemMediaTransportControlsInterop =
             unsafe { RoGetActivationFactory(&HSTRING::from("Windows.Media.SystemMediaTransportControls")) }.ok()?;
         let controls: SystemMediaTransportControls =
