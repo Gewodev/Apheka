@@ -110,10 +110,10 @@ pub async fn download_catalog_track(
   let dir=dir?;
   for ext in AUDIO_EXTENSIONS {let existing=dir.join(format!("direct-{id}.{ext}"));if existing.exists(){return Ok(serde_json::json!({"path":existing.to_string_lossy(),"bytes":fs::metadata(&existing).map_err(|e|e.to_string())?.len()}));}}
   let client=crate::music_network::apply_proxy(reqwest::Client::builder().connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(180)).read_timeout(Duration::from_secs(30)).https_only(true),proxy_mode.as_deref(),proxy_url.as_deref())?.build().map_err(|e|e.to_string())?;
-  let metadata:serde_json::Value=client.get(format!("https://api.audius.co/v1/tracks/{id}?app_name=APHEKA")).send().await.map_err(|_|"No se pudo consultar al proveedor.")?.error_for_status().map_err(|_|"La canción ya no está disponible.")?.json().await.map_err(|_|"Respuesta de catálogo no válida.")?;
+  let metadata:serde_json::Value=client.get(format!("https://api.audius.co/v1/tracks/{id}?app_name=West")).send().await.map_err(|_|"No se pudo consultar al proveedor.")?.error_for_status().map_err(|_|"La canción ya no está disponible.")?.json().await.map_err(|_|"Respuesta de catálogo no válida.")?;
   if !allows_download(&metadata["data"]){return Err("El artista no habilitó una descarga pública para esta grabación.".into());}
   if cancelled.flag.load(Ordering::Relaxed){return Err("Descarga cancelada.".into());}
-  let mut response=client.get(format!("https://api.audius.co/v1/tracks/{id}/download?app_name=APHEKA&original=false")).send().await.map_err(|_|"No se pudo iniciar la descarga.")?.error_for_status().map_err(|_|"El proveedor no permite descargar esta canción ahora.")?;
+  let mut response=client.get(format!("https://api.audius.co/v1/tracks/{id}/download?app_name=West&original=false")).send().await.map_err(|_|"No se pudo iniciar la descarga.")?.error_for_status().map_err(|_|"El proveedor no permite descargar esta canción ahora.")?;
   let part=dir.join(format!("direct-{id}.part"));
   // A previous interrupted transfer for this exact track may be replaced.
   if part.exists(){fs::remove_file(&part).map_err(|_|"No se pudo reiniciar la descarga anterior.")?;}

@@ -1,25 +1,19 @@
-// Cloudflare Worker: proxy compatible con la API Anthropic Messages para Claude Code.
+// Cloudflare Worker: proxy compatible con Anthropic Messages para Claude Code.
+// Todo el trafico se enruta exclusivamente a traves de OpenRouter.
+// Soporte integral de modelos gratuitos de OpenRouter (openrouter/free, prefijo free/*, sufijo :free/-free)
+// y fallback automatico a openrouter/free si un modelo de pago agota saldo.
 //
-// Enruta por prefijo de modelo:
-//   - gemini-*       -> Google Gemini (AI Studio), usando el secreto GEMINI_API_KEY
-//   - cualquier otro -> OpenRouter (comportamiento previo), usando el token del cliente
-//
-// Traduce Anthropic <-> Gemini (contenido, herramientas y streaming) y
-// Anthropic <-> OpenAI (para OpenRouter). Mantiene el contrato que Claude Code espera:
+// Rutas soportadas:
+//   GET  /
+//   GET  /health
 //   GET  /v1/models
-//   POST /v1/messages              (streaming y no streaming)
+//   POST /v1/messages              (streaming SSE y no-streaming)
 //   POST /v1/messages/count_tokens
 //   POST /v1/chat/completions      (alias OpenAI-compatible)
-//
-// Secretos en Cloudflare:
-//   npx wrangler secret put GEMINI_API_KEY   # clave de Google AI Studio (AIza... / AQ...)
-//   npx wrangler secret put PROXY_TOKEN      # token que envía Claude Code en Authorization
-//
-// Variables opcionales: OPENROUTER_URL, HTTP_REFERER, X_TITLE.
 
-const VERSION = 'v13';
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const VERSION = 'v17';
 const DEFAULT_OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const FREE_ROUTER = 'openrouter/free';
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -27,23 +21,154 @@ const CORS = {
   'access-control-allow-headers': 'content-type,authorization,x-api-key,anthropic-version,anthropic-beta,x-proxy-token',
 };
 
-const FALLBACK_GEMINI_MODELS = [
-  'gemini-4-carbon',
-  'gemini-4-argon',
-  'gemini-4-hydrogen',
-  'gemini-3.8-flash',
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-pro-latest',
-  'gemini-flash-latest',
-];
+const OPENROUTER_ALIASES = {
+  // Enrutadores y Prefijos Free de OpenRouter
+  'openrouter/free': 'openrouter/free',
+  'free': 'openrouter/free',
+  'auto-free': 'openrouter/free',
+  'free/auto': 'openrouter/free',
+  'free/any': 'openrouter/free',
+  'free/nemotron': 'nvidia/nemotron-3.5-lightning:free',
+  'free/nemotron-vl': 'nvidia/nemotron-3.5-super-vl:free',
+  'free/gemma': 'google/gemma-4-31b-it:free',
+  'free/flint': 'recursive/flint-v1.0:free',
+  'free/mimo': 'xiaomi/mimo-v2.6-flash:free',
+  'free/minimax': 'minimax/minimax-m3.1-flash:free',
+  'free/deepseek': 'deepseek/deepseek-v4.1-flash-1017:free',
+  'free/glm': 'z-ai/glm-5.3-flashx-legal:free',
 
-function getGeminiApiKey(env) {
-  return String(env.GEMINI_API_KEY || '').trim();
+  // Modelos Gratuitos Específicos OpenRouter
+  'nemotron-3.5-lightning-free': 'nvidia/nemotron-3.5-lightning:free',
+  'nemotron-3.5-lightning:free': 'nvidia/nemotron-3.5-lightning:free',
+  'nemotron-3.5-super-vl-free': 'nvidia/nemotron-3.5-super-vl:free',
+  'nemotron-3.5-super-vl:free': 'nvidia/nemotron-3.5-super-vl:free',
+  'nemotron-3-ultra:free': 'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'nemotron-3-nano:free': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'gemma-4-31b:free': 'google/gemma-4-31b-it:free',
+  'gemma-4-26b:free': 'google/gemma-4-26b-a4b-it:free',
+  'gemma-4-free': 'google/gemma-4-31b-it:free',
+  'flint-40b-free': 'recursive/flint-v1.0:free',
+  'flint:free': 'recursive/flint-v1.0:free',
+  'beam-free': 'openrouter/free',
+  'mimo-v2.6-flash-free': 'xiaomi/mimo-v2.6-flash:free',
+  'mimo-free': 'xiaomi/mimo-v2.6-flash:free',
+  'minimax-m3.1-flash-free': 'minimax/minimax-m3.1-flash:free',
+  'minimax-free': 'minimax/minimax-m3.1-flash:free',
+  'glm-5.3-flash-free': 'z-ai/glm-5.3-flashx-legal:free',
+  'glm-free': 'z-ai/glm-5.3-flashx-legal:free',
+  'deepseek-v4.1-flash-free': 'deepseek/deepseek-v4.1-flash-1017:free',
+  'deepseek-free': 'deepseek/deepseek-v4.1-flash-1017:free',
+  'inkling-2-small-free': 'thinkingmachines/inkling-2-small:free',
+  'longcat-2.5-free': 'liquid/lfm-3-1.7b:free',
+  'iceman-free': 'openrouter/free',
+
+  // Google / Gemini (vía OpenRouter)
+  'gemini-4-carbon': 'google/gemini-4-carbon',
+  'gemini-4-argon': 'google/gemini-4-argon',
+  'gemini-4-hydrogen': 'google/gemini-4-hydrogen',
+  'gemini-3.8-flash': 'google/gemini-3.8-flash',
+  'gemini-3.7-flash': 'google/gemini-3.7-flash',
+  'gemini-3.6-flash': 'google/gemini-3.6-flash',
+  'gemini-3.5-flash': 'google/gemini-3.5-flash',
+  'gemini-3.5-flash-lite': 'google/gemini-3.5-flash-lite',
+  'gemini-3.1-pro': 'google/gemini-2.5-pro',
+  'gemini-2.5-pro': 'google/gemini-2.5-pro',
+  'gemini-2.5-flash': 'google/gemini-2.5-flash',
+  'gemini-2.5-flash-lite': 'google/gemini-2.5-flash-lite',
+  'gemini-pro-latest': 'google/gemini-2.5-pro',
+  'gemini-flash-latest': 'google/gemini-2.5-flash',
+
+  // Anthropic / Claude
+  'claude-opus-5-5': 'anthropic/claude-opus-5.5',
+  'claude-sonnet-5-5': 'anthropic/claude-sonnet-5.5',
+  'claude-haiku-5-5': 'anthropic/claude-haiku-5.5',
+  'claude-fable-5-1': 'anthropic/claude-fable-5.1',
+  'claude-fable-5-2': 'anthropic/claude-fable-5.2',
+
+  // OpenAI / GPT
+  'gpt-5.3-codex': 'openai/gpt-5.3-codex',
+  'gpt-5.3-codex-spark': 'openai/gpt-5.3-codex',
+  'gpt-5.4-mini': 'openai/gpt-5.4-mini',
+  'gpt-5.4-nano': 'openai/gpt-5.4-mini',
+  'gpt-5.5': 'openai/gpt-5.5-pro',
+  'gpt-5.5-pro': 'openai/gpt-5.5-pro',
+  'gpt-5.6-terra': 'openai/gpt-5.5-pro',
+  'gpt-6-astra': 'openai/gpt-5.5-pro',
+  'gpt-6-luna': 'openai/gpt-5.5-pro',
+  'gpt-6.1-sol': 'openai/gpt-5.5-pro',
+
+  // DeepSeek & Otros
+  'deepseek-v4-pro': 'deepseek/deepseek-v4-pro-0813',
+  'deepseek-v4.1-flash': 'deepseek/deepseek-v4.1-flash-1017',
+  'minimax-m3': 'minimax/minimax-m3.1-flash',
+  'glm-5.3': 'z-ai/glm-5.3-flashx-legal',
+  'glm-5.3-flash': 'z-ai/glm-5.3-flashx-legal',
+  'grok-4.7': 'x-ai/grok-4.7',
+  'grok-build-0.1': 'x-ai/grok-4.7',
+  'kimi-k2.7-code': 'moonshotai/kimi-k2.7-code',
+  'kimi-k3': 'moonshotai/kimi-k3.1-pro',
+  'mistral-large-4': 'mistralai/mistral-large-4-0',
+  'muse-ember-1.0': 'meta-llama/llama-3.3-70b-instruct',
+  'muse-wonder-1.0': 'meta-llama/llama-3.3-70b-instruct',
+  'big-pickle': 'meta-llama/llama-3.3-70b-instruct',
+  'qwen3.8-flash': 'qwen/qwen3.8-flash',
+};
+
+function resolveOpenRouterModel(model) {
+  if (!model) return FREE_ROUTER;
+  const trimmed = String(model).trim();
+  if (OPENROUTER_ALIASES[trimmed]) return OPENROUTER_ALIASES[trimmed];
+
+  // Prefijo free/
+  if (trimmed.startsWith('free/')) {
+    const sub = trimmed.slice(5);
+    if (OPENROUTER_ALIASES[sub]) return OPENROUTER_ALIASES[sub];
+    if (OPENROUTER_ALIASES[sub + '-free']) return OPENROUTER_ALIASES[sub + '-free'];
+    return FREE_ROUTER;
+  }
+
+  // Sufijo -free
+  if (trimmed.endsWith('-free')) {
+    const colonVersion = trimmed.replace(/-free$/, ':free');
+    if (OPENROUTER_ALIASES[colonVersion]) return OPENROUTER_ALIASES[colonVersion];
+  }
+
+  // Si ya es un slug con proveedor/modelo (ej. google/gemini-2.5-flash)
+  if (trimmed.includes('/')) return trimmed;
+
+  // Gemini prefix
+  if (trimmed.startsWith('gemini-')) return 'google/' + trimmed;
+
+  return trimmed;
 }
 
-let modelsCache = { at: 0, data: null };
+function clientToken(request) {
+  const auth = request.headers.get('authorization') || '';
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+  const apiKey = (request.headers.get('x-api-key') || '').trim();
+  const proxy = (request.headers.get('x-proxy-token') || '').trim();
+  const raw = proxy || bearer || apiKey;
+  return raw.split('|')[0].trim();
+}
+
+function checkAuth(request, env) {
+  const rawExpected = String(env.PROXY_TOKEN || '').trim();
+  if (!rawExpected) return true;
+  const token = clientToken(request);
+  if (!token) return false;
+  const allowed = rawExpected.split(/[,;\s]+/).map((t) => t.split('|')[0].trim()).filter(Boolean);
+  return allowed.includes(token) || rawExpected === token || rawExpected.split('|')[0].trim() === token;
+}
+
+function getOpenRouterToken(request, env) {
+  const token = clientToken(request);
+  if (token && token.startsWith('sk-or-')) return token;
+  if (env.OPENROUTER_API_KEY) return String(env.OPENROUTER_API_KEY).trim();
+  const rawExpected = String(env.PROXY_TOKEN || '');
+  const found = rawExpected.split(/[,;\s]+/).find((t) => t.trim().startsWith('sk-or-'));
+  if (found) return found.trim();
+  return token;
+}
 
 export default {
   async fetch(request, env) {
@@ -52,7 +177,13 @@ export default {
       const url = new URL(request.url);
 
       if (url.pathname === '/' || url.pathname === '/health') {
-        return json({ status: 'ok', version: VERSION, providers: ['gemini', 'openrouter'] });
+        return json({
+          status: 'ok',
+          version: VERSION,
+          provider: 'openrouter',
+          free_router: FREE_ROUTER,
+          models_supported: Object.keys(OPENROUTER_ALIASES).length,
+        });
       }
 
       if (!checkAuth(request, env)) {
@@ -60,15 +191,17 @@ export default {
       }
 
       if (url.pathname === '/v1/models' && request.method === 'GET') {
-        return await handleModels(env);
+        return handleModels();
       }
 
       if (url.pathname === '/v1/messages' && request.method === 'POST') {
         return await handleMessages(request, env);
       }
+
       if (url.pathname === '/v1/messages/count_tokens' && request.method === 'POST') {
-        return await handleCountTokens(request, env);
+        return await handleCountTokens(request);
       }
+
       if (url.pathname === '/v1/chat/completions' && request.method === 'POST') {
         return await handleOpenAIChat(request, env);
       }
@@ -87,70 +220,26 @@ function json(value, status = 200) {
   });
 }
 
-function clientToken(request) {
-  const auth = request.headers.get('authorization') || '';
-  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
-  const apiKey = (request.headers.get('x-api-key') || '').trim();
-  const proxy = (request.headers.get('x-proxy-token') || '').trim();
-  const raw = proxy || bearer || apiKey;
-  // Compatibilidad con el formato antiguo "clave|extra": se usa la primera parte.
-  return raw.split('|')[0].trim();
-}
-
-function checkAuth(request, env) {
-  const rawExpected = String(env.PROXY_TOKEN || '').trim();
-  if (!rawExpected) return true; // modo abierto si no se configuro secreto
-  const token = clientToken(request);
-  if (!token) return false;
-  const allowed = rawExpected.split(/[,;\s]+/).map((t) => t.split('|')[0].trim()).filter(Boolean);
-  return allowed.includes(token) || rawExpected === token || rawExpected.split('|')[0].trim() === token;
-}
-
-function isGemini(model) {
-  return typeof model === 'string' && /^gemini-[a-z0-9.\-]+$/i.test(model);
-}
-
-// ---------------------------------------------------------------------------
-// Modelos
-// ---------------------------------------------------------------------------
-async function fetchGeminiModels(env) {
-  if (!getGeminiApiKey(env)) return [];
-  const now = Date.now();
-  if (modelsCache.data && now - modelsCache.at < 3600_000) return modelsCache.data;
-  const res = await fetch(GEMINI_BASE + '/models?pageSize=1000', {
-    headers: { 'x-goog-api-key': getGeminiApiKey(env) },
-  });
-  if (!res.ok) return [];
-  const body = await res.json();
-  const list = (body.models || [])
-    .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-    .map((m) => String(m.name || '').replace(/^models\//, ''))
-    .filter((id) => /^gemini-/.test(id) && !/embedding|-image$|tts|transcribe|live|computer-use|robotics/.test(id));
-  modelsCache = { at: now, data: list };
-  return list;
-}
-
-async function handleModels(env) {
-  const gemini = await fetchGeminiModels(env);
-  const data = gemini.map((id) => ({ id, object: 'model', owned_by: 'google', display_name: id }));
+function handleModels() {
+  const data = Object.keys(OPENROUTER_ALIASES).map((id) => ({
+    id,
+    object: 'model',
+    owned_by: id.includes('free') ? 'openrouter-free' : id.startsWith('gemini') ? 'google' : id.startsWith('claude') ? 'anthropic' : 'openrouter',
+    display_name: id,
+  }));
   return json({ object: 'list', data });
 }
 
-// ---------------------------------------------------------------------------
-// Anthropic Messages
-// ---------------------------------------------------------------------------
+async function handleCountTokens(request) {
+  const body = await request.json();
+  const text = JSON.stringify(body.messages || []) + ' ' + JSON.stringify(body.system || '') + ' ' + JSON.stringify(body.tools || '');
+  const approx = Math.max(1, Math.ceil(text.length / 4));
+  return json({ input_tokens: approx });
+}
+
 async function handleMessages(request, env) {
   const body = await request.json();
-  const model = body.model || '';
   const stream = body.stream === true;
-
-  if (isGemini(model)) {
-    if (!getGeminiApiKey(env)) {
-      return json({ type: 'error', error: { type: 'authentication_error', message: 'Falta el secreto GEMINI_API_KEY en el Worker.' } }, 500);
-    }
-    return stream ? geminiStream(body, env) : geminiOnce(body, env);
-  }
-
   return stream ? openRouterStream(body, request, env) : openRouterOnce(body, request, env);
 }
 
@@ -165,359 +254,58 @@ async function handleOpenAIChat(request, env) {
   return handleMessages(fake, env);
 }
 
-async function handleCountTokens(request, env) {
-  const body = await request.json();
-  const model = body.model || '';
-  const approx = estimateTokens(body);
-  if (isGemini(model) && getGeminiApiKey(env)) {
-    try {
-      const payload = { contents: toGeminiContents(body) };
-      const sys = flattenText(body.system);
-      if (sys) payload.systemInstruction = { parts: [{ text: sys }] };
-      const res = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:countTokens`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.totalTokens === 'number') return json({ input_tokens: data.totalTokens });
-      }
-    } catch (_) { /* cae al aproximado */ }
-  }
-  return json({ input_tokens: approx });
-}
-
-function estimateTokens(body) {
-  const text = JSON.stringify(body.messages || []) + ' ' + JSON.stringify(body.system || '') + ' ' + JSON.stringify(body.tools || '');
-  return Math.max(1, Math.ceil(text.length / 4));
-}
-
 // ---------------------------------------------------------------------------
-// Anthropic -> Gemini
+// Traduccion Anthropic -> OpenRouter
 // ---------------------------------------------------------------------------
-function toGeminiContents(body) {
-  const contents = [];
-  const nameById = new Map();
-
-  const pushTurn = (role, parts) => {
-    if (!parts.length) return;
-    const last = contents[contents.length - 1];
-    if (last && last.role === role) last.parts.push(...parts);
-    else contents.push({ role, parts: parts.slice() });
+function openRouterRequest(request, env) {
+  const headers = {
+    'content-type': 'application/json',
+    authorization: 'Bearer ' + getOpenRouterToken(request, env),
   };
-
-  const toolResponse = (block) => {
-    const id = block.tool_use_id || block.tool_call_id || block.id;
-    const name = block.name || nameById.get(id) || 'tool';
-    return { functionResponse: { name, response: { result: extractToolResult(block) } } };
-  };
-
-  for (const msg of body.messages || []) {
-    if (msg.role === 'assistant') {
-      const parts = [];
-      if (typeof msg.content === 'string') {
-        if (msg.content) parts.push({ text: msg.content });
-      } else if (Array.isArray(msg.content)) {
-        for (const block of msg.content) {
-          if (block.type === 'text' && block.text) parts.push({ text: block.text });
-          else if (block.type === 'tool_use') {
-            if (block.id && block.name) nameById.set(block.id, block.name);
-            parts.push({ functionCall: { name: block.name, args: block.input || {} } });
-          }
-        }
-      }
-      for (const call of msg.tool_calls || []) {
-        const name = call.function?.name || call.name;
-        if (call.id && name) nameById.set(call.id, name);
-        parts.push({ functionCall: { name, args: parseMaybeJson(call.function?.arguments ?? call.input ?? {}) } });
-      }
-      pushTurn('model', parts);
-      continue;
-    }
-
-    if (msg.role === 'tool') {
-      pushTurn('user', [toolResponse({ tool_use_id: msg.tool_call_id || msg.tool_use_id, name: msg.name, content: msg.content })]);
-      continue;
-    }
-
-    // user
-    const parts = [];
-    if (typeof msg.content === 'string') {
-      parts.push({ text: msg.content });
-    } else if (Array.isArray(msg.content)) {
-      for (const block of msg.content) {
-        if (block.type === 'text' && typeof block.text === 'string') parts.push({ text: block.text });
-        else if (block.type === 'tool_result') parts.push(toolResponse(block));
-        else if (block.type === 'image' || block.type === 'image_url') {
-          const inline = imageToInline(block);
-          if (inline) parts.push(inline);
-        }
-      }
-    }
-    pushTurn('user', parts.length ? parts : [{ text: '' }]);
-  }
-  if (contents.length && contents[0].role === 'model') {
-    contents.unshift({ role: 'user', parts: [{ text: '' }] });
-  }
-  return contents;
+  if (env.HTTP_REFERER) headers['http-referer'] = env.HTTP_REFERER;
+  else headers['http-referer'] = 'https://claude.ai';
+  if (env.X_TITLE) headers['x-title'] = env.X_TITLE;
+  else headers['x-title'] = 'Claude Code OpenRouter Proxy';
+  return { url: env.OPENROUTER_URL || DEFAULT_OPENROUTER_URL, headers };
 }
 
-function imageToInline(block) {
-  const source = block.source || {};
-  if (source.type === 'base64' && source.data) {
-    return { inlineData: { mimeType: source.media_type || 'image/png', data: source.data } };
-  }
-  if (source.type === 'url' && source.url) return { text: '[imagen: ' + String(source.url).slice(0, 200) + ']' };
-  const url = block.image_url?.url || '';
-  const data = /^data:([^;]+);base64,(.*)$/s.exec(url);
-  if (data) return { inlineData: { mimeType: data[1], data: data[2] } };
-  if (url) return { text: '[imagen: ' + url.slice(0, 200) + ']' };
-  return null;
-}
-
-function extractToolResult(block) {
-  if (block == null) return '';
-  if (typeof block.content === 'string') return block.content;
-  if (Array.isArray(block.content)) return flattenText(block.content) || JSON.stringify(block.content);
-  if (block.content && typeof block.content === 'object') return block.content;
-  return '';
-}
-
-function toGeminiTools(body) {
-  if (!Array.isArray(body.tools) || !body.tools.length) return undefined;
-  const declarations = body.tools
-    .filter((t) => t && (t.name || t.function?.name))
-    .map((t) => ({
-      name: t.name || t.function.name,
-      description: t.description || t.function?.description || '',
-      parameters: sanitizeSchema(t.input_schema || t.function?.parameters),
-    }));
-  return declarations.length ? [{ functionDeclarations: declarations }] : undefined;
-}
-
-const GEMINI_SCHEMA_ALLOWED_KEYS = new Set([
-  'type', 'format', 'description', 'nullable', 'enum',
-  'maxItems', 'minItems', 'properties', 'required', 'items', 'anyOf'
-]);
-
-function sanitizeSchema(schema) {
-  if (!schema || typeof schema !== 'object') return { type: 'object', properties: {} };
-  if (Array.isArray(schema)) return schema.map(sanitizeSchema);
-
-  const out = {};
-  for (const [k, v] of Object.entries(schema)) {
-    if (!GEMINI_SCHEMA_ALLOWED_KEYS.has(k) && k !== 'allOf' && k !== 'oneOf') continue;
-
-    if (k === 'properties' && v && typeof v === 'object' && !Array.isArray(v)) {
-      const props = {};
-      for (const [pk, pv] of Object.entries(v)) {
-        props[pk] = sanitizeSchema(pv);
-      }
-      out.properties = props;
-    } else if (k === 'items') {
-      out.items = Array.isArray(v) ? (v[0] ? sanitizeSchema(v[0]) : { type: 'string' }) : sanitizeSchema(v);
-    } else if (k === 'required') {
-      if (Array.isArray(v)) {
-        const reqs = v.filter((x) => typeof x === 'string');
-        if (reqs.length) out.required = reqs;
-      }
-    } else if (k === 'enum') {
-      if (Array.isArray(v)) out.enum = v.map(String);
-    } else if (k === 'anyOf' || k === 'oneOf' || k === 'allOf') {
-      if (Array.isArray(v)) out.anyOf = v.map(sanitizeSchema);
-    } else if (k === 'type') {
-      out.type = typeof v === 'string' ? v.toLowerCase() : 'object';
-    } else if (GEMINI_SCHEMA_ALLOWED_KEYS.has(k)) {
-      out[k] = v;
-    }
-  }
-
-  if (!out.type && !out.anyOf) {
-    if (out.properties) out.type = 'object';
-    else if (out.items) out.type = 'array';
-    else out.type = 'string';
-  }
-  if (out.type === 'object' && !out.properties && !out.anyOf) {
-    out.properties = {};
-  }
-  if (out.type === 'array' && !out.items) {
-    out.items = { type: 'string' };
-  }
-  return out;
-}
-
-function buildGeminiRequest(body) {
-  const req = { contents: toGeminiContents(body) };
-  const tools = toGeminiTools(body);
-  if (tools) req.tools = tools;
-  const gl = {};
-  if (typeof body.max_tokens === 'number') gl.maxOutputTokens = body.max_tokens;
-  if (typeof body.temperature === 'number') gl.temperature = body.temperature;
-  if (typeof body.top_p === 'number') gl.topP = body.top_p;
-  if (typeof body.top_k === 'number') gl.topK = body.top_k;
-  if (body.stop_sequences) gl.stopSequences = body.stop_sequences;
-  if (Object.keys(gl).length) req.generationConfig = gl;
-  const sys = flattenText(body.system);
-  if (sys) req.systemInstruction = { parts: [{ text: sys }] };
-  return req;
-}
-
-// ---------------------------------------------------------------------------
-// Gemini -> Anthropic (no streaming)
-// ---------------------------------------------------------------------------
-async function geminiOnce(body, env) {
-  const model = body.model;
-  const res = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
-    body: JSON.stringify(buildGeminiRequest(body)),
-  });
-  const data = await res.json();
-  if (!res.ok) return json(mapGeminiError(data, res.status), res.status);
-  return json(geminiToAnthropicMessage(data, model));
-}
-
-function geminiToAnthropicMessage(data, model) {
-  const candidate = data?.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
-  const content = [];
-  let stopReason = 'end_turn';
-  for (const part of parts) {
-    if (typeof part.text === 'string' && part.text.length) {
-      content.push({ type: 'text', text: part.text });
-    } else if (part.functionCall) {
-      content.push({ type: 'tool_use', id: 'toolu_' + randomId(), name: part.functionCall.name, input: part.functionCall.args || {} });
-      stopReason = 'tool_use';
-    }
-  }
-  if (!content.length) content.push({ type: 'text', text: '' });
-  const u = data?.usageMetadata || {};
-  return {
-    id: 'msg_' + randomId(),
-    type: 'message',
-    role: 'assistant',
-    model,
-    content,
-    stop_reason: candidate?.finishReason === 'MAX_TOKENS' ? 'max_tokens' : stopReason,
-    stop_sequence: null,
-    usage: { input_tokens: u.promptTokenCount || 0, output_tokens: u.candidatesTokenCount || 0 },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Gemini -> Anthropic (streaming SSE)
-// ---------------------------------------------------------------------------
-async function geminiStream(body, env) {
-  const model = body.model;
-  const upstream = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': getGeminiApiKey(env) },
-    body: JSON.stringify(buildGeminiRequest(body)),
-  });
-  if (!upstream.ok) {
-    const data = await upstream.json().catch(() => ({}));
-    return json(mapGeminiError(data, upstream.status), upstream.status);
-  }
-
-  const encoder = new TextEncoder();
-  const sse = new ReadableStream({
-    async start(controller) {
-      const send = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
-      let index = -1;
-      let textOpen = false;
-      let outputTokens = 0;
-      let stopReason = 'end_turn';
-
-      send('message_start', {
-        type: 'message_start',
-        message: { id: 'msg_' + randomId(), type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
-      });
-
-      const closeText = () => {
-        if (textOpen) { send('content_block_stop', { type: 'content_block_stop', index }); textOpen = false; }
-      };
-
-      try {
-        for await (const line of readLines(upstream.body)) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          const payload = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
-          if (!payload) continue;
-          let chunk;
-          try { chunk = JSON.parse(payload); } catch (_) { continue; }
-          const obj = Array.isArray(chunk) ? chunk[0] : chunk;
-          const cand = obj?.candidates?.[0];
-          if (obj?.usageMetadata) outputTokens = obj.usageMetadata.candidatesTokenCount || outputTokens;
-          for (const part of cand?.content?.parts || []) {
-            if (typeof part.text === 'string' && part.text.length) {
-              if (!textOpen) {
-                index += 1;
-                send('content_block_start', { type: 'content_block_start', index, content_block: { type: 'text', text: '' } });
-                textOpen = true;
-              }
-              send('content_block_delta', { type: 'content_block_delta', index, delta: { type: 'text_delta', text: part.text } });
-            } else if (part.functionCall) {
-              closeText();
-              index += 1;
-              stopReason = 'tool_use';
-              send('content_block_start', {
-                type: 'content_block_start',
-                index,
-                content_block: { type: 'tool_use', id: 'toolu_' + randomId(), name: part.functionCall.name, input: {} },
-              });
-              send('content_block_delta', {
-                type: 'content_block_delta',
-                index,
-                delta: { type: 'input_json_delta', partial_json: JSON.stringify(part.functionCall.args || {}) },
-              });
-              send('content_block_stop', { type: 'content_block_stop', index });
-            }
-          }
-          if (cand?.finishReason === 'MAX_TOKENS') stopReason = 'max_tokens';
-        }
-        closeText();
-        send('message_delta', { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: outputTokens } });
-        send('message_stop', { type: 'message_stop' });
-        controller.close();
-      } catch (cause) {
-        send('error', { type: 'error', error: { type: 'api_error', message: String(cause && cause.message ? cause.message : cause) } });
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(sse, {
-    headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive', ...CORS },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// OpenRouter (compatibilidad bidireccional)
-// ---------------------------------------------------------------------------
-function anthropicToOpenAI(body) {
+function anthropicToOpenAI(body, overrideModel, overrideMaxTokens) {
   const messages = [];
   const sys = flattenText(body.system);
   if (sys) messages.push({ role: 'system', content: sys });
 
   for (const msg of body.messages || []) {
     if (msg.role === 'tool') {
-      messages.push({ role: 'tool', tool_call_id: msg.tool_call_id || msg.tool_use_id || msg.name, content: stringifyContent(msg.content) });
+      messages.push({
+        role: 'tool',
+        tool_call_id: msg.tool_call_id || msg.tool_use_id || msg.name,
+        content: stringifyContent(msg.content),
+      });
       continue;
     }
+
     if (msg.role === 'assistant') {
       const text = flattenText(msg.content);
       const calls = [];
       if (Array.isArray(msg.content)) {
         for (const block of msg.content) {
-          if (block.type === 'tool_use') calls.push({ id: block.id, type: 'function', function: { name: block.name, arguments: JSON.stringify(block.input || {}) } });
+          if (block.type === 'tool_use') {
+            calls.push({
+              id: block.id,
+              type: 'function',
+              function: { name: block.name, arguments: JSON.stringify(block.input || {}) },
+            });
+          }
         }
       }
       for (const call of msg.tool_calls || []) {
         calls.push({
           id: call.id || ('call_' + randomId()),
           type: 'function',
-          function: { name: call.function?.name || call.name, arguments: typeof call.function?.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function?.arguments ?? call.input ?? {}) },
+          function: {
+            name: call.function?.name || call.name,
+            arguments: typeof call.function?.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function?.arguments ?? call.input ?? {}),
+          },
         });
       }
       const entry = { role: 'assistant', content: text || null };
@@ -531,44 +319,79 @@ function anthropicToOpenAI(body) {
       const parts = [];
       const toolMsgs = [];
       for (const block of msg.content) {
-        if (block.type === 'tool_result') toolMsgs.push({ role: 'tool', tool_call_id: block.tool_use_id || block.id, content: extractToolResult(block) });
-        else if (block.type === 'text') parts.push({ type: 'text', text: block.text });
-        else if (block.type === 'image' || block.type === 'image_url') parts.push(block);
+        if (block.type === 'tool_result') {
+          toolMsgs.push({
+            role: 'tool',
+            tool_call_id: block.tool_use_id || block.id,
+            content: extractToolResult(block),
+          });
+        } else if (block.type === 'text') {
+          parts.push({ type: 'text', text: block.text });
+        } else if (block.type === 'image' || block.type === 'image_url') {
+          parts.push(block);
+        }
       }
       messages.push(...toolMsgs);
-      if (parts.length) messages.push({ role: 'user', content: parts.length === 1 && parts[0].type === 'text' ? parts[0].text : parts });
+      if (parts.length) {
+        messages.push({ role: 'user', content: parts.length === 1 && parts[0].type === 'text' ? parts[0].text : parts });
+      }
     } else {
       messages.push({ role: 'user', content: msg.content });
     }
   }
 
-  const out = { model: body.model, messages };
-  if (typeof body.max_tokens === 'number') out.max_tokens = body.max_tokens;
+  const resolved = overrideModel || resolveOpenRouterModel(body.model);
+  const out = { model: resolved, messages };
+
+  const rawMax = typeof overrideMaxTokens === 'number' ? overrideMaxTokens : body.max_tokens;
+  if (typeof rawMax === 'number') {
+    const isFree = resolved.includes('free') || resolved.endsWith(':free');
+    out.max_tokens = isFree ? Math.min(rawMax, 4096) : Math.min(rawMax, 2048);
+  }
+
   if (typeof body.temperature === 'number') out.temperature = body.temperature;
   if (typeof body.top_p === 'number') out.top_p = body.top_p;
   if (body.stop_sequences) out.stop = body.stop_sequences;
+
   if (Array.isArray(body.tools) && body.tools.length) {
     out.tools = body.tools.map((t) => ({
       type: 'function',
-      function: { name: t.name || t.function?.name, description: t.description || t.function?.description, parameters: t.input_schema || t.function?.parameters },
+      function: {
+        name: t.name || t.function?.name,
+        description: t.description || t.function?.description,
+        parameters: t.input_schema || t.function?.parameters,
+      },
     }));
     out.tool_choice = 'auto';
   }
   return out;
 }
 
-function openRouterRequest(request, env) {
-  const headers = { 'content-type': 'application/json', authorization: 'Bearer ' + clientToken(request) };
-  if (env.HTTP_REFERER) headers['http-referer'] = env.HTTP_REFERER;
-  if (env.X_TITLE) headers['x-title'] = env.X_TITLE;
-  return { url: env.OPENROUTER_URL || DEFAULT_OPENROUTER_URL, headers };
-}
-
 async function openRouterOnce(body, request, env) {
   const { url, headers } = openRouterRequest(request, env);
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...anthropicToOpenAI(body), stream: false }) });
-  const data = await res.json();
-  if (!res.ok) return json({ type: 'error', error: { type: 'api_error', message: data?.error?.message || 'OpenRouter error' } }, res.status);
+  let payload = anthropicToOpenAI(body);
+  let res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, stream: false }),
+  });
+  let data = await res.json();
+
+  // Si OpenRouter devuelve 402 (sin saldo, credit hold o limite excedido),
+  // intentar fallback automatico a openrouter/free
+  if (res.status === 402 && payload.model !== FREE_ROUTER) {
+    payload = anthropicToOpenAI(body, FREE_ROUTER);
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...payload, stream: false }),
+    });
+    data = await res.json();
+  }
+
+  if (!res.ok) {
+    return json({ type: 'error', error: { type: 'api_error', message: data?.error?.message || 'OpenRouter error' } }, res.status);
+  }
   return json(openAIToAnthropicMessage(data, body.model));
 }
 
@@ -577,12 +400,21 @@ function openAIToAnthropicMessage(data, model) {
   const msg = choice?.message || {};
   const content = [];
   let stopReason = choice?.finish_reason === 'tool_calls' ? 'tool_use' : choice?.finish_reason === 'length' ? 'max_tokens' : 'end_turn';
-  if (msg.content) content.push({ type: 'text', text: typeof msg.content === 'string' ? msg.content : flattenText(msg.content) });
+
+  if (msg.content) {
+    content.push({ type: 'text', text: typeof msg.content === 'string' ? msg.content : flattenText(msg.content) });
+  }
   for (const call of msg.tool_calls || []) {
-    content.push({ type: 'tool_use', id: call.id || ('toolu_' + randomId()), name: call.function?.name, input: parseMaybeJson(call.function?.arguments) });
+    content.push({
+      type: 'tool_use',
+      id: call.id || ('toolu_' + randomId()),
+      name: call.function?.name,
+      input: parseMaybeJson(call.function?.arguments),
+    });
     stopReason = 'tool_use';
   }
   if (!content.length) content.push({ type: 'text', text: '' });
+
   return {
     id: 'msg_' + randomId(),
     type: 'message',
@@ -591,42 +423,103 @@ function openAIToAnthropicMessage(data, model) {
     content,
     stop_reason: stopReason,
     stop_sequence: null,
-    usage: { input_tokens: data?.usage?.prompt_tokens || 0, output_tokens: data?.usage?.completion_tokens || 0 },
+    usage: {
+      input_tokens: data?.usage?.prompt_tokens || 0,
+      output_tokens: data?.usage?.completion_tokens || 0,
+    },
   };
 }
 
 async function openRouterStream(body, request, env) {
   const { url, headers } = openRouterRequest(request, env);
-  const upstream = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...anthropicToOpenAI(body), stream: true }) });
+  let payload = anthropicToOpenAI(body);
+  let upstream = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, stream: true }),
+  });
+
   if (!upstream.ok) {
-    const data = await upstream.json().catch(() => ({}));
-    return json({ type: 'error', error: { type: 'api_error', message: data?.error?.message || 'OpenRouter error' } }, upstream.status);
+    const errText = await upstream.text().catch(() => '');
+    let errJson = null;
+    try { errJson = JSON.parse(errText); } catch (_) {}
+    const msg = errJson?.error?.message || errText;
+
+    // Fallback automático si es 402 a openrouter/free
+    if (upstream.status === 402 && payload.model !== FREE_ROUTER) {
+      payload = anthropicToOpenAI(body, FREE_ROUTER);
+      upstream = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...payload, stream: true }),
+      });
+    }
+
+    if (!upstream.ok) {
+      const finalErr = await upstream.json().catch(() => ({}));
+      return json({ type: 'error', error: { type: 'api_error', message: finalErr?.error?.message || msg || 'OpenRouter error' } }, upstream.status);
+    }
   }
 
   const encoder = new TextEncoder();
   const sse = new ReadableStream({
     async start(controller) {
-      const send = (event, payload) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      const send = (event, p) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(p)}\n\n`));
       let index = -1;
       let textOpen = false;
       let stopReason = 'end_turn';
       const toolSlots = new Map();
-      send('message_start', { type: 'message_start', message: { id: 'msg_' + randomId(), type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } });
-      const closeText = () => { if (textOpen) { send('content_block_stop', { type: 'content_block_stop', index }); textOpen = false; } };
+
+      send('message_start', {
+        type: 'message_start',
+        message: {
+          id: 'msg_' + randomId(),
+          type: 'message',
+          role: 'assistant',
+          model: body.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+      });
+
+      const closeText = () => {
+        if (textOpen) {
+          send('content_block_stop', { type: 'content_block_stop', index });
+          textOpen = false;
+        }
+      };
+
       try {
         for await (const line of readLines(upstream.body)) {
           const trimmed = line.trim();
           if (!trimmed.startsWith('data:')) continue;
-          const payload = trimmed.slice(5).trim();
-          if (payload === '[DONE]') break;
+          const rawPayload = trimmed.slice(5).trim();
+          if (rawPayload === '[DONE]') break;
           let chunk;
-          try { chunk = JSON.parse(payload); } catch (_) { continue; }
+          try { chunk = JSON.parse(rawPayload); } catch (_) { continue; }
+
           const choice = chunk?.choices?.[0] || {};
           const delta = choice.delta || {};
+
           if (typeof delta.content === 'string' && delta.content.length) {
-            if (!textOpen) { index += 1; send('content_block_start', { type: 'content_block_start', index, content_block: { type: 'text', text: '' } }); textOpen = true; }
-            send('content_block_delta', { type: 'content_block_delta', index, delta: { type: 'text_delta', text: delta.content } });
+            if (!textOpen) {
+              index += 1;
+              send('content_block_start', {
+                type: 'content_block_start',
+                index,
+                content_block: { type: 'text', text: '' },
+              });
+              textOpen = true;
+            }
+            send('content_block_delta', {
+              type: 'content_block_delta',
+              index,
+              delta: { type: 'text_delta', text: delta.content },
+            });
           }
+
           for (const call of delta.tool_calls || []) {
             const slot = call.index ?? 0;
             if (!toolSlots.has(slot)) {
@@ -634,17 +527,38 @@ async function openRouterStream(body, request, env) {
               index += 1;
               toolSlots.set(slot, index);
               stopReason = 'tool_use';
-              send('content_block_start', { type: 'content_block_start', index, content_block: { type: 'tool_use', id: call.id || ('toolu_' + randomId()), name: call.function?.name || 'tool', input: {} } });
+              send('content_block_start', {
+                type: 'content_block_start',
+                index,
+                content_block: {
+                  type: 'tool_use',
+                  id: call.id || ('toolu_' + randomId()),
+                  name: call.function?.name || 'tool',
+                  input: {},
+                },
+              });
             }
             if (call.function?.arguments) {
-              send('content_block_delta', { type: 'content_block_delta', index: toolSlots.get(slot), delta: { type: 'input_json_delta', partial_json: call.function.arguments } });
+              send('content_block_delta', {
+                type: 'content_block_delta',
+                index: toolSlots.get(slot),
+                delta: { type: 'input_json_delta', partial_json: call.function.arguments },
+              });
             }
           }
+
           if (choice.finish_reason === 'length') stopReason = 'max_tokens';
         }
+
         closeText();
-        for (const idx of toolSlots.values()) send('content_block_stop', { type: 'content_block_stop', index: idx });
-        send('message_delta', { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 0 } });
+        for (const idx of toolSlots.values()) {
+          send('content_block_stop', { type: 'content_block_stop', index: idx });
+        }
+        send('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: stopReason, stop_sequence: null },
+          usage: { output_tokens: 0 },
+        });
         send('message_stop', { type: 'message_stop' });
         controller.close();
       } catch (cause) {
@@ -653,11 +567,19 @@ async function openRouterStream(body, request, env) {
       }
     },
   });
-  return new Response(sse, { headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive', ...CORS } });
+
+  return new Response(sse, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      ...CORS,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Utilidades
+// Helpers
 // ---------------------------------------------------------------------------
 async function* readLines(body) {
   if (!body) return;
@@ -691,37 +613,62 @@ function stringifyContent(content) {
   return JSON.stringify(content);
 }
 
+function extractToolResult(block) {
+  if (block == null) return '';
+  if (typeof block.content === 'string') return block.content;
+  if (Array.isArray(block.content)) return flattenText(block.content) || JSON.stringify(block.content);
+  if (block.content && typeof block.content === 'object') return JSON.stringify(block.content);
+  return '';
+}
+
 function parseMaybeJson(value) {
   if (value == null) return {};
   if (typeof value === 'object') return value;
   try { return JSON.parse(value); } catch (_) { return { value }; }
 }
 
-function mapGeminiError(data, status) {
-  const message = data?.error?.message || 'Gemini error';
-  const type = status === 401 || status === 403 ? 'authentication_error' : status === 429 ? 'rate_limit_error' : 'api_error';
-  return { type: 'error', error: { type, message } };
-}
-
 function openAItoAnthropic(body) {
   const messages = [];
   let system = '';
   for (const msg of body.messages || []) {
-    if (msg.role === 'system') { system += (system ? '\n' : '') + stringifyContent(msg.content); continue; }
-    if (msg.role === 'assistant') {
-      messages.push({ role: 'assistant', content: msg.content || '', tool_calls: (msg.tool_calls || []).map((c) => ({ id: c.id, function: { name: c.function?.name, arguments: c.function?.arguments } })) });
+    if (msg.role === 'system') {
+      system += (system ? '\n' : '') + stringifyContent(msg.content);
       continue;
     }
-    if (msg.role === 'tool') { messages.push({ role: 'tool', tool_call_id: msg.tool_call_id, name: msg.tool_call_id, content: msg.content }); continue; }
+    if (msg.role === 'assistant') {
+      messages.push({
+        role: 'assistant',
+        content: msg.content || '',
+        tool_calls: (msg.tool_calls || []).map((c) => ({
+          id: c.id,
+          function: { name: c.function?.name, arguments: c.function?.arguments },
+        })),
+      });
+      continue;
+    }
+    if (msg.role === 'tool') {
+      messages.push({
+        role: 'tool',
+        tool_call_id: msg.tool_call_id,
+        name: msg.tool_call_id,
+        content: msg.content,
+      });
+      continue;
+    }
     messages.push({ role: 'user', content: msg.content });
   }
+
   return {
     model: body.model,
     system: system || undefined,
     messages,
     max_tokens: body.max_tokens || body.max_completion_tokens,
     temperature: body.temperature,
-    tools: (body.tools || []).map((t) => ({ name: t.function?.name, description: t.function?.description, input_schema: t.function?.parameters })),
+    tools: (body.tools || []).map((t) => ({
+      name: t.function?.name,
+      description: t.function?.description,
+      input_schema: t.function?.parameters,
+    })),
     stream: !!body.stream,
   };
 }

@@ -1,5 +1,4 @@
-# APHEKA
-
+# West
 Plataforma de productividad y estudio personal para Windows, construida con Tauri 2 + React 19 + TypeScript. Integra planificador academico, reproductor musical, gestor de tareas, notas enriquecidas, cursos con seguimiento de progreso, temporizador Pomodoro/Cronometro, asistente de IA (Charvis), voz en vivo, y sincronizacion con Google (Calendar/Tasks/Classroom).
 
 ## Stack

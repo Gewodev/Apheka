@@ -1,6 +1,6 @@
 {
   "identifier": "com.owa.studio",
-  "productName": "APHEKA",
+  "productName": "West",
   "version": "6.27.0",
   "bundle": {
     "resources": {
@@ -8,5 +8,5 @@
     },
     "useLocalToolsDir": true
   },
-  "mainBinaryName": "APHEKA"
+  "mainBinaryName": "West"
 }

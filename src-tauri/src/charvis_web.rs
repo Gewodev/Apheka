@@ -120,7 +120,7 @@ async fn client(state: &WebState, url: &reqwest::Url) -> Result<reqwest::Client,
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(8))
-        .user_agent("APHEKA/6.23 (study research)")
+        .user_agent("West/6.27 (study research)")
         .build()
         .map_err(|_| "No se pudo preparar la lectura web.")?;
     let mut cache = state.clients.lock().map_err(|_| "Conexión ocupada.")?;

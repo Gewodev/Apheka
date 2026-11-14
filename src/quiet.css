@@ -78,7 +78,7 @@
 .single-environment{--panel-radius:13px;--panel-corner:7px}
 .studio-environment .bento-card,.studio-environment :is(.catalog-song,.music-songs-grid article,.playlist-tile){border-radius:var(--panel-radius) var(--panel-corner) var(--panel-radius) var(--panel-corner)!important}
 .studio-environment .bento-card{border-color:color-mix(in srgb,var(--text-primary) 14%,transparent)!important}
-.studio-environment .sidebar .apheka-lettermark{font-family:'IBM Plex Sans',sans-serif!important;font-weight:600;letter-spacing:0;gap:1.8px;font-size:26px;line-height:1.15}
+.studio-environment .sidebar .west-lettermark{font-family:'Inter Tight','IBM Plex Sans',sans-serif!important;font-weight:300;letter-spacing:.012em;gap:.055em;font-size:24px;line-height:1.1}
 .studio-environment :is(button,input,select,textarea){font-family:var(--font-primary)}
 .integrated-player button svg{stroke-width:1.7}.integrated-player-transport button[aria-pressed=true]{color:var(--accent)}.integrated-player-transport small{font-size:8px;align-self:flex-start}
 @media(prefers-reduced-motion:reduce){.integrated-player,.integrated-player-handle{transition:none}}

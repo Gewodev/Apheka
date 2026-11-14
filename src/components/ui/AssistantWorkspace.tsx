@@ -50,7 +50,7 @@ function AssistantStudyImport(){
   };
   return <div className="assistant-workspace">
     <section className="bento-card mcp-settings" aria-labelledby="assistant-study-title">
-      <div className="mcp-card-heading"><span className="mcp-mark"><NotebookPen size={20}/></span><div><h3 id="assistant-study-title">Traer contenido de mi IA</h3><p>Convierte una respuesta de tu asistente en contenido de APHEKA.</p></div></div>
+      <div className="mcp-card-heading"><span className="mcp-mark"><NotebookPen size={20}/></span><div><h3 id="assistant-study-title">Traer contenido de mi IA</h3><p>Convierte una respuesta de tu asistente en contenido de West.</p></div></div>
       <p className="mcp-description">Elige una habilidad, copia las instrucciones y pégalas en tu IA. Después trae su respuesta aquí: podrás revisarla y guardar apuntes, tareas y tarjetas sin configurar una conexión.</p>
       <div className="mcp-fields-grid">
         <label>Mi asistente<select aria-label="Mi asistente" value={client} onChange={e=>setClient(e.target.value)}>{['ChatGPT','Claude','Gemini','Copilot','Otro asistente o IDE'].map(name=><option key={name}>{name}</option>)}</select></label>
@@ -60,10 +60,10 @@ function AssistantStudyImport(){
       <label className="mcp-prompt-preferences">Qué necesitas estudiar<textarea value={request} onChange={e=>setRequest(e.target.value)} rows={3} maxLength={6000} placeholder="Por ejemplo: crea apuntes de álgebra con ejemplos y un repaso de 10 preguntas."/></label>
       <div className="mcp-actions"><button className="mcp-confirm" onClick={()=>void copy()}><Copy size={16}/>Copiar instrucciones para mi IA</button></div>
       <section className="mcp-setup-section" aria-labelledby="assistant-import-heading">
-        <div className="mcp-section-heading"><h4 id="assistant-import-heading">Traer la respuesta a APHEKA</h4></div>
+        <div className="mcp-section-heading"><h4 id="assistant-import-heading">Traer la respuesta a West</h4></div>
         <label className="mcp-prompt-label">Respuesta de mi asistente<textarea aria-label="Respuesta de mi asistente" rows={5} value={response} onChange={e=>{setResponse(e.target.value);setPack(null);setError('');setMessage('');}} placeholder="Pega el bloque de respuesta que preparó tu IA siguiendo las instrucciones." maxLength={220001}/></label>
         <div className="mcp-actions"><button disabled={!response.trim()||busy} onClick={()=>{try{setPack(parseAssistantPack(response));setError('');setMessage('');}catch(e){setPack(null);setError((e as Error).message);}}}><Check size={16}/>Revisar contenido</button></div>
-        {pack&&<div className="assistant-review"><h4>{pack.title}</h4><p>{pack.notes.length} apuntes · {pack.tasks.length} tareas · {pack.flashcards.length} tarjetas</p><p>Destino: {selected?.name||'Mi espacio general'}. Las tarjetas se guardan en un tema nuevo del curso.</p><ul>{[...pack.notes.map(n=>'Apunte: '+n.title),...pack.tasks.map(t=>'Tarea: '+t.title),...pack.flashcards.map(c=>'Tarjeta: '+c.question)].slice(0,12).map((text,i)=><li key={i}>{text}</li>)}</ul><button className="mcp-confirm" disabled={busy} onClick={()=>void apply()}>{busy?'Guardando…':'Añadir a APHEKA'}<ChevronRight size={16}/></button></div>}
+        {pack&&<div className="assistant-review"><h4>{pack.title}</h4><p>{pack.notes.length} apuntes · {pack.tasks.length} tareas · {pack.flashcards.length} tarjetas</p><p>Destino: {selected?.name||'Mi espacio general'}. Las tarjetas se guardan en un tema nuevo del curso.</p><ul>{[...pack.notes.map(n=>'Apunte: '+n.title),...pack.tasks.map(t=>'Tarea: '+t.title),...pack.flashcards.map(c=>'Tarjeta: '+c.question)].slice(0,12).map((text,i)=><li key={i}>{text}</li>)}</ul><button className="mcp-confirm" disabled={busy} onClick={()=>void apply()}>{busy?'Guardando…':'Añadir a West'}<ChevronRight size={16}/></button></div>}
       </section>
       {error&&<p className="mcp-feedback" role="alert">{error}</p>}{message&&<p className="mcp-feedback is-success" role="status">{message}</p>}
       <p className="mcp-muted">Solo se comparten las instrucciones que copies. La respuesta no ejecuta comandos ni reemplaza tus notas. El contenido se añade después de revisarlo; comprueba su exactitud antes de estudiar.</p>

@@ -1,5 +1,5 @@
 {
-  "productName": "APHEKA",
+  "productName": "West",
   "version": "6.27.0",
   "identifier": "com.owa.studio",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "APHEKA",
+        "title": "West",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -82,5 +82,5 @@
     },
     "notification": null
   },
-  "mainBinaryName": "APHEKA"
+  "mainBinaryName": "West"
 }

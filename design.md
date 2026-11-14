@@ -1,4 +1,4 @@
-# 🧠 APHEKA — MASTER DESIGN SYSTEM (v2.0)
+# 🧠 West — MASTER DESIGN SYSTEM (v2.0)
 
 ## Creative North Star: "Cognitive Control Interface"
 
@@ -372,12 +372,12 @@ Temas principales | Recursos del curso
 > El diseño no impresiona — **funciona**.
 
 
-## APHEKA — desktop refinement, 2026-10-12
-The desktop workspace uses restrained neobrutalist blocks: 5–6px corners, visible borders, small solid offset shadows and flat surfaces. Shared WorkspaceHeader and workspace.css define the current system. Keep the existing logo, accent customization, and Estudio composition. APHEKA lettering is larger, matte and separated with subtle cuts. Settings use top categories and a searchable contextual index. Support dark/light themes and compact 1200×800 desktop windows. Fonts are bundled for offline use.
+## West — desktop refinement, 2026-10-12
+The desktop workspace uses restrained neobrutalist blocks: 5–6px corners, visible borders, small solid offset shadows and flat surfaces. Shared WorkspaceHeader and workspace.css define the current system. Keep the existing logo, accent customization, and Estudio composition. West lettering is larger, matte and separated with subtle cuts. Settings use top categories and a searchable contextual index. Support dark/light themes and compact 1200×800 desktop windows. Fonts are bundled for offline use.
 
 
 ### Current finish (supersedes the earlier solid-shadow pass)
-Preserve the familiar desktop composition. Use quiet borders, 7–9px corners, flat soft surfaces and no hard offset shadows. `refinement.css` is the final finish. Planner controls remain in their original positions, with icon view buttons. APHEKA uses the bundled Inter Tight face and tiny internal cuts, rather than hand-drawn glyphs. DurationControl is shared by Settings and the small right-click pomodoro popup; no circular selector or additional study header button. Use container width for time-control density and maintain layouts with the sidebar expanded/collapsed.
+Preserve the familiar desktop composition. Use quiet borders, 7–9px corners, flat soft surfaces and no hard offset shadows. `refinement.css` is the final finish. Planner controls remain in their original positions, with icon view buttons. West uses the bundled Inter Tight face and tiny internal cuts, rather than hand-drawn glyphs. DurationControl is shared by Settings and the small right-click pomodoro popup; no circular selector or additional study header button. Use container width for time-control density and maintain layouts with the sidebar expanded/collapsed.
 
 Final desktop details: Inicio keeps its three overview blocks in one row at desktop widths; appearance opacity applies to workspace surfaces while dialogs stay opaque. Music uses flat bordered tiles, subtle hover borders and a stable expanded cover without 3D tilt. Course tools share the same readable dialog spacing and explicit color choices.
 

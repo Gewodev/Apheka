@@ -716,7 +716,7 @@ function MatchRun({ pairs, matId, color, accent }: { pairs: DeckPair[]; matId: s
                 transformStyle: 'preserve-3d', position: 'relative', minHeight: 112, height: '100%',
               }}>
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 13, backfaceVisibility: 'hidden', border: `1px solid ${isWrong ? '#EF444460' : 'var(--border-subtle)'}`, background: isWrong ? 'rgba(239,68,68,0.08)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--text-muted)', opacity: 0.4 }}>APHEKA</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--text-muted)', opacity: 0.4 }}>West</span>
                 </div>
                 <div style={{
                   borderRadius: 13, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', position: 'absolute', inset: 0, padding: '12px 14px',

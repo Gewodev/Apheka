@@ -10,7 +10,7 @@ Students and self-learners in deep work sessions, usually at night in dim ambien
 
 ## Product Purpose
 
-APHEKA is a high-performance academic operating system for deep study, focus, task execution, planning, and cognitive workflow management. It replaces scattered tools (Notion, Todoist, Google Calendar, Spotify) with one premium integrated environment.
+West is a high-performance academic operating system for deep study, focus, task execution, planning, and cognitive workflow management. It replaces scattered tools (Notion, Todoist, Google Calendar, Spotify) with one premium integrated environment.
 
 ## Brand Personality
 

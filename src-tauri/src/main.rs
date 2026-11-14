@@ -23,6 +23,7 @@ mod rendering;
 mod release_notice;
 mod mcp;
 mod catalog_download;
+mod windows_identity;
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
@@ -131,7 +132,7 @@ async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String>
     let client = reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(10)).timeout(std::time::Duration::from_secs(180)).build().map_err(|e|e.to_string())?;
     let release = client
         .get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
-        .header("User-Agent", "APHEKA")
+        .header("User-Agent", "West")
         .send()
         .await
         .map_err(|e| format!("Error consultando release de yt-dlp: {e}"))?
@@ -150,7 +151,7 @@ async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String>
 
     let mut resp = client
         .get(download_url)
-        .header("User-Agent", "APHEKA")
+        .header("User-Agent", "West")
         .send()
         .await
         .map_err(|e| format!("Error descargando yt-dlp: {e}"))?
@@ -783,6 +784,9 @@ fn main() {
     if std::env::args().nth(1).as_deref()==Some("--apheka-asr-worker"){local_asr::worker_main();return;}
     if std::env::args().any(|arg| arg == "--mcp") { mcp::stdio_main(); return; }
     let context=tauri::generate_context!();
+    // The Windows shell must know the identity before any window or toast is
+    // created, otherwise notifications fall back to the generic WebView2 icon.
+    windows_identity::init();
     let rendering=rendering::configure(&context.config().identifier);
     let default_download_path = dirs::download_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))

@@ -1,7 +1,7 @@
 [package]
 name = "owa-studio"
 version = "6.27.0"
-description = "APHEKA - Tu espacio de estudio"
+description = "West - Tu espacio de estudio"
 authors = ["Gewodev"]
 edition = "2021"
 
@@ -37,7 +37,7 @@ tauri-winrt-notification = "=0.7.3"
 webview2-com = "0.38.2"
 windows-core = "0.61"
 windows = { version = "0.61", features = ["Foundation", "Media", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT"] }
-windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Security", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_UI_Shell", "Win32_System_Registry"] }
 
 [profile.release]
 panic = "abort" # Strip fatal error messages for smaller binary

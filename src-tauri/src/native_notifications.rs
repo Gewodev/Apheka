@@ -88,15 +88,21 @@ pub async fn send_workspace_notification(
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(windows)]
         {
-            use tauri_winrt_notification::{Duration, Toast};
+            use tauri_winrt_notification::{Duration, IconCrop, Toast};
             let app_id = app.config().identifier.clone();
             let handle = app.clone();
-            // Only navigation: dismissing a toast never deletes its task/event.
-            Toast::new(&app_id)
+            let mut toast = Toast::new(&app_id)
                 .title(&title)
                 .text1(&body)
                 .duration(Duration::Short)
-                .add_button(target.label(), if target.action.is_some() {"execute"} else {"open"})
+                .add_button(target.label(), if target.action.is_some() {"execute"} else {"open"});
+            // Without an explicit logo the shell falls back to the generic
+            // WebView2 icon. The original artwork travels with the toast.
+            if let Some(logo) = crate::windows_identity::logo_uri_file() {
+                toast = toast.icon(&logo, IconCrop::Square, "West");
+            }
+            // Only navigation: dismissing a toast never deletes its task/event.
+            toast
                 .on_activated(move |action| {
                     if let Some(destination)=target.activated(action.as_deref()) {
                         if let Some(window) = handle.get_webview_window("main") {

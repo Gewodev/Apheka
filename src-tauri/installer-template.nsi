@@ -58,10 +58,14 @@ Var ReinstallPageCheck
 !define WEBVIEW2BOOTSTRAPPERPATH "{{webview2_bootstrapper_path}}"
 !define WEBVIEW2INSTALLERPATH "{{webview2_installer_path}}"
 !define MINIMUMWEBVIEW2VERSION "{{minimum_webview2_version}}"
-; Preserve upgrade identity and install location across the product name change.
-!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA"
+; Single installable identity. The previous product keys are kept as read-only
+; fallbacks so an upgrade never relocates the app nor changes the per-user /
+; per-machine scope.
+!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\West"
 !define MANUKEY "Software\${MANUFACTURER}"
-!define MANUPRODUCTKEY "${MANUKEY}\APHEKA"
+!define MANUPRODUCTKEY "${MANUKEY}\West"
+!define LEGACYUNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA"
+!define LEGACYPRODUCTKEY "Software\owa\APHEKA"
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
@@ -77,8 +81,8 @@ Var WixMode
 Var OldMainBinaryName
 
 Name "${PRODUCTNAME}"
-BrandingText "APHEKA ${VERSION} · Gewodev"
-Caption "APHEKA ${VERSION} · Instalar y actualizar"
+BrandingText "West ${VERSION} · Gewodev"
+Caption "West ${VERSION} · Instalar y actualizar"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -89,7 +93,7 @@ InstallDir "${PLACEHOLDER_INSTALL_DIR}"
 
 VIProductVersion "${VERSIONWITHBUILD}"
 VIAddVersionKey "ProductName" "${PRODUCTNAME}"
-VIAddVersionKey "FileDescription" "APHEKA · Instalador de escritorio"
+VIAddVersionKey "FileDescription" "West · Instalador de escritorio"
 VIAddVersionKey "Comments" "Estudio, organización y Charvis en un solo espacio."
 VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -528,6 +532,10 @@ Function .onInit
 
 
   !if "${INSTALLMODE}" == "both"
+    ; Carry the previous install scope into the West key before MultiUser reads
+    ; it, so upgrading never silently moves the app between per-user and
+    ; per-machine.
+    Call APHEKA_MIGRATE_INSTALLMODE
     !insertmacro MULTIUSER_INIT
   !endif
 FunctionEnd
@@ -909,9 +917,18 @@ Section Uninstall
 SectionEnd
 
 Function RestorePreviousInstallLocation
+  ; West first, then the previous product. The legacy uninstaller keeps the
+  ; install location because it is always called with /UPDATE.
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
-  StrCmp $4 "" +2 0
+  ${If} $4 == ""
+    ReadRegStr $4 SHCTX "${LEGACYPRODUCTKEY}" ""
+  ${EndIf}
+  ${If} $4 == ""
+    ReadRegStr $4 SHCTX "${LEGACYUNINSTKEY}" "InstallLocation"
+  ${EndIf}
+  ${If} $4 != ""
     StrCpy $INSTDIR $4
+  ${EndIf}
 FunctionEnd
 
 Function Skip

@@ -13,7 +13,7 @@ import {usePanelWidth,PanelResizeHandle} from '../../hooks/usePanelWidth';
 import PlanSelectDropdown from '../ui/PlanSelectDropdown';
 import { taskLinkUnavailable } from '../../lib/linkEligibility';
 import WorkspaceHeader from '../ui/WorkspaceHeader';
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect, memo } from 'react';
 import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
@@ -119,6 +119,72 @@ function getFileIcon(type: string, size = 14) {
 }
 
 
+
+const TaskListRow = memo(function TaskListRow({ t, selected, riskLabel, riskUrgent, riskTitle, isDndDragging, onStatus, onOpen, dragSuppressRef }: {
+  t: Task; selected: boolean; riskLabel: string; riskUrgent: boolean; riskTitle: string; isDndDragging: boolean;
+  onStatus: (id: string, status: Task['status']) => void; onOpen: (id: string) => void; dragSuppressRef: React.MutableRefObject<boolean>;
+}) {
+  const tr = t.dueDate ? getTimeRemaining(t.dueDate) : null;
+  const isDone = t.status === 'completado';
+  const isOverdue = tr?.overdue && !isDone;
+  const titleColor = isDone ? 'var(--text-tertiary)' : 'var(--text-primary)';
+  const dateColor = isDone ? '#10B981' : (isOverdue ? '#EF4444' : 'var(--text-secondary)');
+  const stripColor = statusConfig[t.status]?.color || '#F59E0B';
+  const bgStatus = isDone ? 'rgba(16,185,129,0.03)' : 'transparent';
+  return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, border: '0', background: selected ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}
+                                className="task-ranked-row" data-task-id={t.id} data-urgent={riskUrgent} >
+                                <TaskStateButton task={t} onStatus={(id,status)=>{if(!dragSuppressRef.current)onStatus(id,status);}}/>
+                                {/* Content area — click opens detail */}
+                                <div onClick={(e) => { e.stopPropagation(); if (dragSuppressRef.current) return; onOpen(t.id); }}
+                                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0, padding: '0 18px 0 12px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
+                                  <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                      {t.title}
+                                    </span>
+                                    {riskLabel&&t.status!=='completado'&&<span className="task-list-risk" title={riskTitle}>{riskLabel}</span>}
+                                  </div>
+                                  <div style={{ flex: 2.2, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                    {t.course && t.course !== 'Sin curso' ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: t.courseColor + '12', color: t.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: t.status === 'progreso' ? `1px solid ${t.courseColor}50` : '1px solid transparent' }}>
+                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor, flexShrink: 0, boxShadow: t.status === 'progreso' ? `0 0 6px ${t.courseColor}80` : 'none' }} />
+                                      {t.course}
+                                    </span>
+                                    ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, padding: '2px 10px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', fontStyle: 'italic' }}>
+                                      Sin curso
+                                    </span>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {t.priority !== 'none' ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
+                                      {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
+                                    </span>
+                                    ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      Sin prioridad
+                                    </span>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {tr && (
+                                      <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
+                                        {tr.text}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ width: 30, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div onClick={(e) => { e.stopPropagation(); onOpen(t.id); }}
+                                      style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
+                                      className="hover:bg-white/[0.06]">
+                                      <ChevronRight size={11} style={{ color: 'var(--text-muted)' }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+  );
+});
 
 function SortableTaskRow({ task, children }: { task: Task; children: (dragProps: { isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -230,8 +296,10 @@ export default function Tareas() {
   }
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setIsInitialLoading(false), 650); return () => clearTimeout(t); }, []);
+  // El esqueleto cubre solo la carga real. Al terminar la hidratacion las
+  // filas aparecen en el siguiente render, sin esperas artificiales.
+  const hydrated = useAppSlice(['hydrated']).hydrated;
+  const isInitialLoading = !hydrated;
   try { useEffect(() => { localStorage.setItem('owa_tasks_view', viewMode); }, [viewMode]); } catch { /* cuota */ }
   useEffect(() => {
     const pendingId = localStorage.getItem('owa_pending_task_id');
@@ -583,7 +651,7 @@ export default function Tareas() {
     setNewMaterialName(''); setNewMaterialPath(''); setShowAddMaterial(false);
   }, [selectedTask, newMaterialName, newMaterialPath, addTaskFile, fetchPageTitle, deriveLinkName, updateTask, tasks]);
 
-  const changeStatus=(id:string,status:Task['status'])=>{const task=tasks.find(task=>task.id===id);if(!task||task.status===status)return;updateTask(id,{status,completedAt:status==='completado'?new Date().toISOString():undefined});};
+  const changeStatus=useCallback((id:string,status:Task['status'])=>{const task=getApp().tasks.find(task=>task.id===id);if(!task||task.status===status)return;updateTask(id,{status,completedAt:status==='completado'?new Date().toISOString():undefined});},[getApp,updateTask]);
   const beginRecommendedStudy=(id:string,mode:'pomodoro'|'chrono'='pomodoro',minutes?:number,subtaskId?:string)=>{
     const task=tasks.find(task=>task.id===id),blocked=taskLinkUnavailable(task);
     if(blocked){addNotification(blocked,'info');return;}
@@ -703,68 +771,20 @@ export default function Tareas() {
                       {filteredTasks.map(task => {
                         const t = task;
                         const assessment=assessments.get(t.id);
-                        const tr = t.dueDate ? getTimeRemaining(t.dueDate) : null;
-                        const isDone = t.status === 'completado';
-                        const isOverdue = tr?.overdue && !isDone;
-                        const titleColor = isDone ? 'var(--text-tertiary)' : 'var(--text-primary)';
-                        const dateColor = isDone ? '#10B981' : (isOverdue ? '#EF4444' : 'var(--text-secondary)');
-                        const stripColor = statusConfig[t.status]?.color || '#F59E0B';
-                        const bgStatus = isDone ? 'rgba(16,185,129,0.03)' : 'transparent';
-                        const isDragging = activeDragId === t.id;
                         return (
                           <SortableTaskRow key={t.id} task={t}>
                             {({ isDragging: isDndDragging }) => (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, border: '0', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}
-                                className="task-ranked-row" data-task-id={t.id} data-urgent={assessment?.urgent||false} >
-                                <TaskStateButton task={t} onStatus={(id,status)=>{if(!dragSuppressRef.current)changeStatus(id,status);}}/>
-                                {/* Content area — click opens detail */}
-                                <div onClick={(e) => { e.stopPropagation(); if (dragSuppressRef.current) return; handleOpenDetail(t.id); }}
-                                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0, padding: '0 18px 0 12px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
-                                  <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
-                                      {t.title}
-                                    </span>
-                                    {assessment&&t.status!=='completado'&&<span className="task-list-risk" title={assessment.reasons.join('\n')}>{assessment.label}</span>}
-                                  </div>
-                                  <div style={{ flex: 2.2, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                    {t.course && t.course !== 'Sin curso' ? (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: t.courseColor + '12', color: t.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: t.status === 'progreso' ? `1px solid ${t.courseColor}50` : '1px solid transparent' }}>
-                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor, flexShrink: 0, boxShadow: t.status === 'progreso' ? `0 0 6px ${t.courseColor}80` : 'none' }} />
-                                      {t.course}
-                                    </span>
-                                    ) : (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, padding: '2px 10px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', fontStyle: 'italic' }}>
-                                      Sin curso
-                                    </span>
-                                    )}
-                                  </div>
-                                  <div style={{ flex: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {t.priority !== 'none' ? (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
-                                      {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
-                                    </span>
-                                    ) : (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                      Sin prioridad
-                                    </span>
-                                    )}
-                                  </div>
-                                  <div style={{ flex: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {tr && (
-                                      <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
-                                        {tr.text}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ width: 30, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
-                                      style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
-                                      className="hover:bg-white/[0.06]">
-                                      <ChevronRight size={11} style={{ color: 'var(--text-muted)' }} />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
+                              <TaskListRow
+                                t={t}
+                                selected={selectedTaskId === t.id}
+                                riskLabel={assessment?.label || ''}
+                                riskUrgent={!!assessment?.urgent}
+                                riskTitle={(assessment?.reasons || []).join('\n')}
+                                isDndDragging={isDndDragging}
+                                onStatus={changeStatus}
+                                onOpen={handleOpenDetail}
+                                dragSuppressRef={dragSuppressRef}
+                              />
                             )}
                           </SortableTaskRow>
                         );

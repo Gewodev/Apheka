@@ -133,7 +133,7 @@ export const RESTORE_MARKER = 'owa_restore_pending';
 
 export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean; message: string }> {
   if (!backup || backup.format !== 'owa-studio-backup') {
-    return { ok: false, message: 'El archivo no es un respaldo válido de APHEKA' };
+    return { ok: false, message: 'El archivo no es un respaldo válido de West' };
   }
   // Marcador anti-pisado: el auto-guardado (cada segundo por el temporizador)
   // NO debe sobrescribir lo restaurado antes de la recarga. Se limpia al

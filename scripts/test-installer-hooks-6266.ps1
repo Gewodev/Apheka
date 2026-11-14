@@ -122,6 +122,7 @@ SectionEnd
   if ($upgrade.previousName -ne 'OWA Studio' -or $upgrade.previousVersion -ne '6.7.0') { throw 'Wrong upgrade context' }
   $null = New-Item -ItemType Directory -Force -Path $legacy
   [IO.File]::WriteAllText((Join-Path $legacy 'owa-studio.exe'), 'unrelated fixture')
+  $null = New-Item -Path "$registryPath\OWA Studio" -Force
   $null = Set-ItemProperty -Path "$registryPath\OWA Studio" -Name Publisher -Value 'Unrelated publisher'
   Run-QA 'installer.exe'
   if (-not (Test-Path -LiteralPath (Join-Path $legacy 'owa-studio.exe'))) { throw 'Unrelated product was removed' }

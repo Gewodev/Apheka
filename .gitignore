@@ -44,7 +44,15 @@ Thumbs.db
 src-tauri/resources/asr/
 
 # Los instaladores se conservan en disco y se documentan con su SHA-256 en
-# docs/APHEKA-release-*.json. Esta conexion corta las subidas grandes
+# docs/WEST-release-*.json. Esta conexion corta las subidas grandes
 # (HTTP 408), asi que no se versionan.
 release/*.exe
-!release/apheka_FINAL.exe
+!release/west_FINAL.exe
+
+# Artefactos locales de QA y medición: no forman parte del producto.
+dist-qa/
+release/qa-*.json
+scripts/_dbg-*.cjs
+scripts/perf-*.cjs
+scripts/profile-*.cjs
+vite.qa.config.ts

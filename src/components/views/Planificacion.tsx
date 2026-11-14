@@ -839,8 +839,8 @@ export default function Planificacion() {
                                     opacity: isDragging ? 0.4 : 1,
                                     transition: 'opacity 150ms',
                                   }}
-                                  onMouseEnter={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}20, 0 6px 20px rgba(0,0,0,0.25)`; e.currentTarget.style.zIndex='4'; }}
-                                  onMouseLeave={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; }}
+                                  onMouseEnter={e=>{ e.currentTarget.style.outline = `1px solid ${itemColor}59`; e.currentTarget.style.outlineOffset = '-1px'; e.currentTarget.style.zIndex='4'; }}
+                                  onMouseLeave={e=>{ e.currentTarget.style.outline = 'none'; e.currentTarget.style.zIndex='3'; }}
                                   >
                                   {hpx <= 62 ? (
                                     <div title={item.title} style={{ display:'flex', flexDirection:'column', justifyContent:'center', minWidth:0, height:'100%' }}>
@@ -945,10 +945,10 @@ export default function Planificacion() {
                                       background: `linear-gradient(135deg, ${pCol}16, ${pCol}05)`,
                                       borderLeft: `3px solid ${pCol}66`,
                                       display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '5px 9px',
-                                      transition: 'all 150ms', opacity: done ? 0.72 : 1,
+                                      transition: 'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.72 : 1,
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}22, ${pCol}0a)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}16, ${pCol}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}22, ${pCol}0a)`; e.currentTarget.style.outline = `1px solid ${pCol}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}16, ${pCol}05)`; e.currentTarget.style.outline = 'none'; }}
                                   >
                                     <span style={{ fontSize: 10.5, fontWeight: 700, color: pCol, fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
                                       {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
@@ -985,10 +985,10 @@ export default function Planificacion() {
                                       background: `linear-gradient(135deg, ${col}14, ${col}05)`,
                                       borderLeft: `3px dashed ${col}99`,
                                       display:'flex', flexDirection:'column', justifyContent:'center', padding:'4px 9px', overflow:'hidden',
-                                      transition:'all 150ms', opacity: done ? 0.65 : 1,
+                                      transition:'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.65 : 1,
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${col}30`; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.outline = `1px solid ${col}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.outline = 'none'; }}
                                   >
                                     <span style={{ fontSize: 10.5, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
                                       {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}
@@ -1186,10 +1186,10 @@ export default function Planificacion() {
                               background: `linear-gradient(135deg, ${pCol}18, ${pCol}06)`,
                               borderLeft: `3px solid ${pCol}66`,
                               display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 11px',
-                              transition: 'all 150ms', opacity: done ? 0.72 : 1,
+                              transition: 'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.72 : 1,
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}26, ${pCol}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}18, ${pCol}06)`; e.currentTarget.style.boxShadow = 'none'; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}26, ${pCol}0c)`; e.currentTarget.style.outline = `1px solid ${pCol}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}18, ${pCol}06)`; e.currentTarget.style.outline = 'none'; }}
                           >
                             <span style={{ fontSize: 12, fontWeight: 700, color: pCol, fontFamily: "'Inter',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
                               {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
@@ -1226,10 +1226,10 @@ export default function Planificacion() {
                               background: `linear-gradient(135deg, ${col}14, ${col}05)`,
                               borderLeft: `3px dashed ${col}99`,
                               display:'flex', flexDirection:'column', justifyContent:'center', padding:'5px 11px', overflow:'hidden',
-                              transition:'all 150ms', opacity: done ? 0.65 : 1,
+                              transition:'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.65 : 1,
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${col}30`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.outline = `1px solid ${col}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.outline = 'none'; }}
                           >
                             <span style={{ fontSize: 12, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
                               {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}

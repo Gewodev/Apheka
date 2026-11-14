@@ -76,7 +76,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "OWA Studio ${{ steps.updater.outputs.version }}"
+          name: "West ${{ steps.updater.outputs.version }}"
           draft: false
           prerelease: false
           files: |

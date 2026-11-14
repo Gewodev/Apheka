@@ -10,6 +10,17 @@ type Context={now?:number;dailyGoal?:number;courses?:Course[];studySessions?:Stu
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const positive=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>0?n:0;
 const fold=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+/** El texto plegado de cada tarea se calcula una sola vez: es el paso mas caro
+ *  del analisis y solo depende del contenido de la tarea. */
+type Folded={text:string;subtasks:number};
+const foldedCache=new WeakMap<Task,Folded>();
+function foldedText(task:Task):string{
+ const subtasks=task.subtasks||[],cached=foldedCache.get(task);
+ if(cached&&cached.subtasks===subtasks.length)return cached.text;
+  const text=fold([task.title||'',(task.notes||'').replace(/<[^>]*>/g,' ').slice(0,4000),...subtasks.map(sub=>sub.title||'')].join(' '));
+ foldedCache.set(task,{text,subtasks:subtasks.length});
+ return text;
+}
 export const taskIsActive=(task:Task)=>task.status!=='completado'&&!(task as Task&{deletedAt?:string}).deletedAt;
 
 /** Date-only deadlines last through the local day, never expire at midnight's start. */
@@ -39,7 +50,7 @@ export function assessTasks(tasks:Task[],context:Context={}):Map<string,TaskAsse
  const courses=new Map((context.courses||[]).map(course=>[course.name,course]));
  const work=tasks.map(task=>{
   const subtasks=task.subtasks||[],pending=subtasks.filter(sub=>!sub.done).length,files=task.files||[];
-  const text=fold([task.title,(task.notes||'').replace(/<[^>]*>/g,' ').slice(0,4000),...subtasks.map(sub=>sub.title)].join(' '));
+  const text=foldedText(task);
   const assessment=/\b(examen|exam|parcial|final|evaluacion|exposicion|defensa)\b/.test(text);
   const project=/\b(proyecto|investigacion|ensayo|informe|tesis|monografia|laboratorio)\b/.test(text);
   const count=Number(/\b(\d{1,3})\s*(ejercicios|problemas|paginas|capitulos)\b/.exec(text)?.[1]||0);
@@ -56,6 +67,25 @@ export function assessTasks(tasks:Task[],context:Context={}):Map<string,TaskAsse
  const cumulative=new Map<string,{minutes:number;count:number}>();let sum=0,count=0;
  for(let i=0;i<dated.length;){let end=i;while(end<dated.length&&dated[end].deadline===dated[i].deadline){sum+=dated[end].remaining;count++;end++;}for(let j=i;j<end;j++)cumulative.set(dated[j].task.id,{minutes:sum,count});i=end;}
  const committed=(context.plannedSessions||[]).filter(session=>!session.completed).map(session=>({time:taskDeadline(session.date+'T'+(session.startTime||'12:00')),minutes:positive(session.durationMinutes),courseId:session.courseId})).filter(row=>row.time!==null&&row.time>now).sort((a,b)=>a.time!-b.time!);
+  // Sumas acumuladas por tiempo y por curso: la reserva de otras clases se
+  // resuelve sin recorrer todas las sesiones en cada tarea.
+  const committedTotal:number[]=[],committedByCourse=new Map<string,{index:number;total:number}[]>();
+  let committedSum=0;
+  committed.forEach((row,index)=>{
+   committedSum+=row.minutes;committedTotal[index]=committedSum;
+   const key=row.courseId||'',list=committedByCourse.get(key)||[],previous=list[list.length-1]?.total||0;
+   list.push({index,total:previous+row.minutes});
+   committedByCourse.set(key,list);
+  });
+  const bookedUntil=(deadline:number,courseId?:string)=>{
+   if(!committedTotal.length)return 0;
+   let low=0,high=committed.length-1,found=-1;
+   while(low<=high){const mid=(low+high)>>1;const entry=committed[mid];if(entry&&entry.time!==null&&entry.time<=deadline){found=mid;low=mid+1;}else high=mid-1;}
+   if(found<0)return 0;
+   const courseRows=courseId?committedByCourse.get(courseId):undefined;let mine=0;
+    if(courseRows?.length){let low=0,high=courseRows.length-1,at=-1;while(low<=high){const mid=(low+high)>>1;if(courseRows[mid].index<=found){at=mid;low=mid+1;}else high=mid-1;}if(at>=0)mine=courseRows[at].total;}
+   return Math.max(0,(committedTotal[found]??0)-mine);
+  };
  const result=new Map<string,TaskAssessment>();
  for(const row of work){
   const {task,deadline,remaining,estimated,pending,assessment,project}=row,active=taskIsActive(task),hours=deadline===null?Infinity:(deadline-now)/3600000;
@@ -67,7 +97,7 @@ export function assessTasks(tasks:Task[],context:Context={}):Map<string,TaskAsse
    urgency=hours<=0?100:hours<=24?85:hours<=72?65:hours<=168?38:15;
    reasons.push(hours<=0?'Entrega vencida.':hours<24?'Entrega en menos de 24 horas.':`Entrega en ${Math.ceil(hours/24)} días.`);
    // Existing sessions in other courses compete for the same study budget.
-   const otherBookings=committed.reduce((total,s)=>total+(s.time!<=deadline&&s.courseId!==course?.id?s.minutes:0),0);
+    const otherBookings=bookedUntil(deadline,course?.id);
    const capacity=Math.max(15,hours/24*budget-Math.min(otherBookings,Math.max(0,hours/24*budget*.6)));
    const load=(pressure?.minutes||remaining)/capacity;
    urgency=Math.max(urgency,load>=1?90:load>=.7?73:load>=.45?56:0);

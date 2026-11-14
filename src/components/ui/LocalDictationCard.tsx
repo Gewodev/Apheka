@@ -21,7 +21,7 @@ export default function LocalDictationCard(){
   const ready=status?.ready===true;
   return <section className="bento-card mcp-settings" aria-labelledby="local-dictation-heading">
     <div className="mcp-card-heading"><span className="mcp-mark">{ready?<Check size={19}/>:<Download size={19}/>}</span><div><h3 id="local-dictation-heading">Dictado local en español</h3><p>Reconocimiento de voz dentro del equipo, sin enviar audio a ningún servidor.</p></div></div>
-    <p className="mcp-description">El motor de voz se prepara una sola vez y se conserva en tu carpeta de datos. No se descarga al abrir APHEKA ni pesa en el instalador; el audio se decodifica con ffmpeg, que ya viene incluido.</p>
+    <p className="mcp-description">El motor de voz se prepara una sola vez y se conserva en tu carpeta de datos. No se descarga al abrir West ni pesa en el instalador; el audio se decodifica con ffmpeg, que ya viene incluido.</p>
     {ready&&<p className="mcp-feedback is-success">Dictado local preparado. Se usa de forma automática al transcribir.</p>}
     {!ready&&status&&<p className="mcp-muted">Faltan {status.missing.length} archivos del motor de voz ({human(status.bytes)}). Al prepararlos se descargan una vez y se verifican con su huella.</p>}
     {!status&&!busy&&<p className="mcp-muted">No se pudo consultar el estado del dictado local.</p>}

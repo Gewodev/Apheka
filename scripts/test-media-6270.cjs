@@ -20,7 +20,7 @@ await step('native flyout receives the song that is really loaded',async()=>{
  const last=calls[calls.length-1];
  assert.equal(last.title,'Tema uno',JSON.stringify(last));
  assert.equal(last.artist,'Artista uno');
- assert.equal(last.album,'APHEKA');
+ assert.equal(last.album,'West');
  assert.ok(last.duration>0,JSON.stringify(last));
  assert.ok('cover' in last,JSON.stringify(last));
 });

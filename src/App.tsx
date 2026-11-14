@@ -20,7 +20,7 @@ import EditorBlockMenu from './components/ui/EditorBlockMenu';
 import ReleaseNotice from './components/ui/ReleaseNotice';
 import McpBridge from './components/McpBridge';
 import { useFullscreenLifecycle } from './hooks/useWindowFullscreen';
-import AphekaWordmark from './components/ui/AphekaWordmark';
+import WestWordmark from './components/ui/WestWordmark';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
@@ -595,8 +595,8 @@ export function AppContent() {
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
         <div className="sidebar-logo" role="button" tabIndex={0} aria-label={isCollapsed ? 'Expandir menú' : 'Contraer menú'} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSidebar();}}} onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
-          <img src="/owa_logo.png" alt="APHEKA" className="sidebar-logo-img" />
-          {!isCollapsed && <AphekaWordmark />}
+          <img src="/owa_logo.png" alt="West" className="sidebar-logo-img" />
+          {!isCollapsed && <WestWordmark />}
         </div>
 
         {/* ─── Navigation ─── */}

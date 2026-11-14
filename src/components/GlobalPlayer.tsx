@@ -49,7 +49,7 @@ export default function GlobalPlayer({sidebarCollapsed: _collapsed}: {sidebarCol
     syncNativeMedia({
       title: track.title,
       artist: track.artist,
-      album: 'APHEKA',
+      album: 'West',
       playing: a.isPlayingMusic,
       position: nativePosition,
       duration: nativeDuration,

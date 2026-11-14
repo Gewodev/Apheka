@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {assessTasks,chooseStudyTask,taskDeadline} from '../src/lib/taskIntelligence.ts';
-import type {Task} from '../src/store/AppContext.tsx';
+import type {Course,PlannedSession,Task} from '../src/store/AppContext.tsx';
 const now=new Date(2026,9,29,12).getTime();
 const make=(id:string,patch:Partial<Task>={}):Task=>({id,title:id,course:'Física',courseColor:'#78968c',status:'inicio',priority:'none',urgent:false,important:false,createdAt:new Date(now-86400000).toISOString(),estimatedMinutes:60,subtasks:[],files:[],notes:'',apuntes:'',studyTime:0,...patch});
 const tasks=[make('high-due',{priority:'high',dueDate:'2026-10-30'}),make('high-far',{priority:'high',dueDate:'2026-12-01'}),make('low-due',{priority:'low',dueDate:'2026-10-30'}),make('low-far',{priority:'low',dueDate:'2026-12-01'}),make('medium-due',{priority:'medium',dueDate:'2026-10-30'}),make('medium-far',{priority:'medium',dueDate:'2026-12-01'}),make('invalid',{priority:'high',dueDate:'2026-02-30'}),make('overdue',{dueDate:'2026-10-28'}),make('done',{priority:'high',status:'completado',dueDate:'2026-10-29'}),make('undated')];
@@ -15,6 +15,23 @@ assert.equal(taskDeadline('2026-10-29T15:00:00Z'),Date.parse('2026-10-29T15:00:0
 const progress=make('progress',{estimatedMinutes:120,studyTime:1800,subtasks:[{id:'a',title:'Primero',done:true},{id:'b',title:'Después',done:false}]});
 assert.equal(assessTasks([progress],{now,studySessions:[{id:'s',taskId:'progress',type:'pomodoro',duration:1800,startedAt:new Date(now-3600000).toISOString(),pauseCount:0,pauseDuration:0}]}).get('progress')?.remainingMinutes,60,'do not double count study logs or completed subtasks');
 assert.equal(assessTasks([make('infer',{title:'Investigar proyecto de 20 páginas',estimatedMinutes:undefined,files:[{id:'f',name:'Consigna.pdf',path:'C:/never-open-this.pdf',type:'pdf'}]})],{now}).get('infer')?.estimated,true);
+// El plegado recorre titulo, notas y subtareas una sola vez, sin recursion.
+const foldedTask=make('folded',{title:'Repaso',notes:'<p>Examen final</p>',estimatedMinutes:undefined,subtasks:[{id:'s1',title:'20 ejercicios',done:false},{id:'s2',title:'Laboratorio',done:false}]});
+const folded=assessTasks([foldedTask],{now}).get('folded')!;
+assert.equal(folded.estimated,true);assert.equal(folded.remainingMinutes,219,'fold title, notes and subtasks once');
+assert.equal(assessTasks([foldedTask],{now}).get('folded')?.remainingMinutes,219,'folded task cache remains stable');
+// Las sesiones del mismo curso no consumen el margen de la tarea; las de
+// otros cursos si, y cada reserva se contabiliza hasta la entrega.
+const physics={id:'physics',name:'Física'} as Course;
+const history={id:'history',name:'Historia'} as Course;
+const planned=(id:string,courseId:string,durationMinutes:number):PlannedSession=>({id,courseId,date:'2026-10-30',title:id,startTime:courseId==='physics'?'08:00':'09:00',durationMinutes,type:'estudio',completed:false,createdAt:new Date(now).toISOString()});
+const bookedTask=make('booked',{course:'Física',dueDate:'2026-10-30T12:00:00',estimatedMinutes:120});
+const ownBooking=assessTasks([bookedTask],{now,courses:[physics,history],plannedSessions:[planned('own','physics',120)]}).get('booked')!;
+const crossBooking=assessTasks([bookedTask],{now,courses:[physics,history],plannedSessions:[planned('own','physics',120),planned('other','history',120)]}).get('booked')!;
+assert.equal(ownBooking.urgency,85,'same-course booking does not consume the task capacity');
+assert.equal(crossBooking.urgency,90,'cross-course booking consumes the task capacity');
+assert.ok(!ownBooking.reasons.some(reason=>reason.includes('sesiones de otros cursos')));
+assert.ok(crossBooking.reasons.some(reason=>reason.includes('sesiones de otros cursos')));
 const only=make('alone',{dueDate:'2026-11-10',estimatedMinutes:120});const alone=assessTasks([only],{now,dailyGoal:60}).get('alone')!;
 const loaded=assessTasks([only,...Array.from({length:20},(_,i)=>make('work'+i,{dueDate:'2026-11-10',estimatedMinutes:120}))],{now,dailyGoal:60}).get('alone')!;
 assert.ok(loaded.urgency>alone.urgency,'workload compared to the other active tasks');

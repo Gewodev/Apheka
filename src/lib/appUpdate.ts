@@ -56,7 +56,7 @@ export async function checkAppUpdate(currentVersion: string): Promise<UpdateFind
       return {
         version: installed,
         kind: 'installed',
-        message: `APHEKA ${installed} ya está instalada. Reinicia la aplicación para usarla.`,
+        message: `West ${installed} ya está instalada. Reinicia la aplicación para usarla.`,
         action: {label: 'Reiniciar ahora', kind: 'relaunch'},
       };
     }
@@ -74,7 +74,7 @@ export async function checkAppUpdate(currentVersion: string): Promise<UpdateFind
         version,
         kind: 'channel',
         notes: channel.notes?.trim() || undefined,
-        message: `Hay una actualización disponible: APHEKA ${version}.`,
+        message: `Hay una actualización disponible: West ${version}.`,
         action,
       };
     }
