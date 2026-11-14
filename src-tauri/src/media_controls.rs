@@ -279,25 +279,7 @@ mod platform {
 
     pub fn clear() {
         SESSION.with(|cell| {
-            let mut slot = cell.borrow_mut();
-            let Some(s) = slot.as_mut() else { return };
-            let _ = s.controls.SetPlaybackStatus(MediaPlaybackStatus::Stopped);
-            let _ = s.controls.SetIsEnabled(false);
-            if let Ok(updater) = s.controls.DisplayUpdater() {
-                let _ = updater.ClearAll();
-                let _ = updater.Update();
-            }
-            s.title.clear();
-            s.artist.clear();
-            s.album.clear();
-            s.playing = false;
-            s.can_next = false;
-            s.can_prev = false;
-            s.position = 0.0;
-            s.duration = 0.0;
-            s.cover_key = None;
-            s.cover = None;
-            s.primed = false;
+            cell.take(); // Drop the session entirely so it gets recreated fresh
         });
     }
 }

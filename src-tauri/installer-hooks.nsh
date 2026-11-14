@@ -40,24 +40,20 @@ Var /GLOBAL AphekaPreviousVersion
   ReadRegStr $1 ${ROOT} "Software\Microsoft\Windows\CurrentVersion\Uninstall\${KEY}" "Publisher"
   ReadRegStr $2 ${ROOT} "Software\Microsoft\Windows\CurrentVersion\Uninstall\${KEY}" "DisplayVersion"
   StrCpy $3 "0"
-  ${If} $1 == "owa"
-    ${If} $0 == "${KEY}"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "West"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "APHEKA"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "POHU"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "POUH"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "OWA Studio"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "OwA Project"
-      StrCpy $3 "1"
-    ${ElseIf} $0 == "OwA Project_Beta"
-      StrCpy $3 "1"
-    ${EndIf}
+  ${If} $0 == "${KEY}"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "APHEKA"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "POHU"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "POUH"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "OWA Studio"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "OwA Project"
+    StrCpy $3 "1"
+  ${ElseIf} $0 == "OwA Project_Beta"
+    StrCpy $3 "1"
   ${EndIf}
 !macroend
 
@@ -286,6 +282,56 @@ Function APHEKA_CAPTURE_HISTORY
     Return
   ${EndIf}
 
+  ; ---------------------------------------------------------------------------
+  ; FALLBACK: escanear TODAS las claves de desinstalación por si alguna
+  ; versión anterior usó un nombre de clave diferente (p. ej. "POUH 6.26.6").
+  ; ---------------------------------------------------------------------------
+  ${If} $AphekaHadPrevious != "true"
+    ${If} $3 != "1"
+      StrCpy $0 0
+      scan_hklm:
+        EnumRegKey $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall" $0
+        ${If} $1 != ""
+          ReadRegStr $2 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
+          ${If} $2 == "APHEKA"
+          ${OrIf} $2 == "POHU"
+          ${OrIf} $2 == "POUH"
+          ${OrIf} $2 == "OWA Studio"
+          ${OrIf} $2 == "OwA Project"
+          ${OrIf} $2 == "OwA Project_Beta"
+            StrCpy $AphekaHadPrevious "true"
+            StrCpy $AphekaPreviousName $2
+            ReadRegStr $AphekaPreviousVersion HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayVersion"
+            Goto scan_done
+          ${EndIf}
+          IntOp $0 $0 + 1
+          Goto scan_hklm
+        ${EndIf}
+      scan_hklm:
+      ${If} $AphekaHadPrevious != "true"
+        StrCpy $0 0
+        EnumRegKey $1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall" $0
+        ${If} $1 != ""
+          ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
+          ${If} $2 == "APHEKA"
+          ${OrIf} $2 == "POHU"
+          ${OrIf} $2 == "POUH"
+          ${OrIf} $2 == "OWA Studio"
+          ${OrIf} $2 == "OwA Project"
+          ${OrIf} $2 == "OwA Project_Beta"
+            StrCpy $AphekaHadPrevious "true"
+            StrCpy $AphekaPreviousName $2
+            ReadRegStr $AphekaPreviousVersion HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayVersion"
+            Goto scan_done
+          ${EndIf}
+          IntOp $0 $0 + 1
+          Goto scan_hklm
+        ${EndIf}
+      scan_hklm:
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  scan_done:
   Pop $3
   Pop $2
   Pop $1
@@ -378,7 +424,6 @@ FunctionEnd
   ${OrIf} $0 == "OWA Studio"
   ${OrIf} $0 == "OwA Project"
   ${OrIf} $0 == "OwA Project_Beta"
-    ${If} $1 == "owa"
     StrCpy $AphekaHadPrevious "true"
     StrCpy $AphekaPreviousName "${NAME}"
     ReadRegStr $AphekaPreviousVersion ${ROOT} "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "DisplayVersion"

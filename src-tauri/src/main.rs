@@ -796,7 +796,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(rendering)
-        .setup(|app|{youtube_identity::configure(app.handle());let _=retire_legacy_media_windows(app.handle().clone());Ok(())})
+        .setup(|app|{youtube_identity::configure(app.handle());let _=retire_legacy_media_windows(app.handle().clone());let _=media_controls::media_controls_clear(app.handle().clone());Ok(())})
         .manage(music_network::MusicNetwork::default())
         .manage(jev::JevState::default())
         .manage(charvis::CharvisState::default())
@@ -864,6 +864,8 @@ fn main() {
             // Auxiliary windows cannot keep a headless main instance alive.
             // Main's close-requested handler flushes the editors before this event.
             if window.label()=="main" && matches!(event,tauri::WindowEvent::Destroyed) {
+                // Clean up SMTC media session so no stale "unknown application" player remains
+                let _ = media_controls::media_controls_clear(window.app_handle().clone());
                 local_asr::stop_all();
                 let mut children:Vec<_>=window.state::<DownloadState>().active.lock().map(|mut active|active.drain().map(|(_,child)|child).collect()).unwrap_or_default();
                 for child in &mut children {stop_download_child(child); }
