@@ -289,7 +289,7 @@ Function APHEKA_CAPTURE_HISTORY
   ${If} $AphekaHadPrevious != "true"
     ${If} $3 != "1"
       StrCpy $0 0
-      scan_hklm:
+      scan_hklm_loop:
         EnumRegKey $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall" $0
         ${If} $1 != ""
           ReadRegStr $2 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
@@ -305,29 +305,30 @@ Function APHEKA_CAPTURE_HISTORY
             Goto scan_done
           ${EndIf}
           IntOp $0 $0 + 1
-          Goto scan_hklm
+          Goto scan_hklm_loop
         ${EndIf}
-      scan_hklm:
+      ${EndIf}
       ${If} $AphekaHadPrevious != "true"
         StrCpy $0 0
-        EnumRegKey $1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall" $0
-        ${If} $1 != ""
-          ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
-          ${If} $2 == "APHEKA"
-          ${OrIf} $2 == "POHU"
-          ${OrIf} $2 == "POUH"
-          ${OrIf} $2 == "OWA Studio"
-          ${OrIf} $2 == "OwA Project"
-          ${OrIf} $2 == "OwA Project_Beta"
-            StrCpy $AphekaHadPrevious "true"
-            StrCpy $AphekaPreviousName $2
-            ReadRegStr $AphekaPreviousVersion HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayVersion"
-            Goto scan_done
+        scan_hkcu_loop:
+          EnumRegKey $1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall" $0
+          ${If} $1 != ""
+            ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayName"
+            ${If} $2 == "APHEKA"
+            ${OrIf} $2 == "POHU"
+            ${OrIf} $2 == "POUH"
+            ${OrIf} $2 == "OWA Studio"
+            ${OrIf} $2 == "OwA Project"
+            ${OrIf} $2 == "OwA Project_Beta"
+              StrCpy $AphekaHadPrevious "true"
+              StrCpy $AphekaPreviousName $2
+              ReadRegStr $AphekaPreviousVersion HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$1" "DisplayVersion"
+              Goto scan_done
+            ${EndIf}
+            IntOp $0 $0 + 1
+            Goto scan_hkcu_loop
           ${EndIf}
-          IntOp $0 $0 + 1
-          Goto scan_hklm
         ${EndIf}
-      scan_hklm:
       ${EndIf}
     ${EndIf}
   ${EndIf}
