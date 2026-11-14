@@ -30,6 +30,10 @@ Var /GLOBAL AphekaHadPrevious
 Var /GLOBAL AphekaPreviousName
 Var /GLOBAL AphekaPreviousVersion
 
+; ---------------------------------------------------------------------------
+; Lee una clave de desinstalación. Si pertenece a la familia OWA, deja:
+;   $0 = DisplayName, $1 = Publisher, $2 = DisplayVersion, $3 = "1"
+; ---------------------------------------------------------------------------
 !macro APHEKA_READ_INSTALL_RECORD ROOT KEY
   ReadRegStr $0 ${ROOT} "Software\Microsoft\Windows\CurrentVersion\Uninstall\${KEY}" "DisplayName"
   ReadRegStr $1 ${ROOT} "Software\Microsoft\Windows\CurrentVersion\Uninstall\${KEY}" "Publisher"
@@ -52,6 +56,10 @@ Var /GLOBAL AphekaPreviousVersion
   ${EndIf}
 !macroend
 
+; ---------------------------------------------------------------------------
+; Captura el historial antes de que la página de mantenimiento de Tauri
+; pueda eliminar el registro anterior.
+; ---------------------------------------------------------------------------
 Function APHEKA_CAPTURE_HISTORY
   Push $0
   Push $1
@@ -60,138 +68,171 @@ Function APHEKA_CAPTURE_HISTORY
   StrCpy $AphekaHadPrevious "false"
   StrCpy $AphekaPreviousName "West"
   StrCpy $AphekaPreviousVersion ""
-  StrCpy $4 "false"
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "West"
   ${If} $3 == "1"
-    StrCpy $4 "true"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName "West"
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "West"
-    ${If} $3 == "1"
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "West"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName "West"
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "APHEKA"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "APHEKA"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "APHEKA"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "APHEKA"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POHU"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POHU"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POHU"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POHU"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POUH"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POUH"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POUH"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POUH"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OWA Studio"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OWA Studio"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OWA Studio"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OWA Studio"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project_Beta"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project_Beta"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  ${If} $4 != "true"
-    !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project_Beta"
-    ${If} $3 == "1"
-      StrCpy $AphekaHadPrevious "true"
-      StrCpy $AphekaPreviousName $0
-      StrCpy $AphekaPreviousVersion $2
-      StrCpy $4 "true"
-    ${EndIf}
+  !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project_Beta"
+  ${If} $3 == "1"
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
   Pop $3
@@ -226,28 +267,36 @@ FunctionEnd
 
 !macro APHEKA_REMOVE_OWNED_SHORTCUT_IN_DIR NAME DIR SHORTCUT
   ${If} ${FileExists} "${DIR}\owa-studio.exe"
-  ${ElseIf} ${FileExists} "${DIR}\${NAME}.exe"
-  ${ElseIf} ${FileExists} "${DIR}\APHEKA.exe"
-  ${ElseIf} ${FileExists} "${DIR}\POHU.exe"
-  ${ElseIf} ${FileExists} "${DIR}\POUH.exe"
     !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\owa-studio.exe"
     Pop $R0
-    ${If} $0 != 1
-      !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\${NAME}.exe"
-      Pop $R0
+    ${If} $0 == 1
+      Delete "${SHORTCUT}"
     ${EndIf}
-    ${If} $0 != 1
-      !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\APHEKA.exe"
-      Pop $R0
+  ${EndIf}
+  ${If} ${FileExists} "${DIR}\${NAME}.exe"
+    !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\${NAME}.exe"
+    Pop $R0
+    ${If} $0 == 1
+      Delete "${SHORTCUT}"
     ${EndIf}
-    ${If} $0 != 1
-      !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POHU.exe"
-      Pop $R0
+  ${EndIf}
+  ${If} ${FileExists} "${DIR}\APHEKA.exe"
+    !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\APHEKA.exe"
+    Pop $R0
+    ${If} $0 == 1
+      Delete "${SHORTCUT}"
     ${EndIf}
-    ${If} $0 != 1
-      !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POUH.exe"
-      Pop $R0
+  ${EndIf}
+  ${If} ${FileExists} "${DIR}\POHU.exe"
+    !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POHU.exe"
+    Pop $R0
+    ${If} $0 == 1
+      Delete "${SHORTCUT}"
     ${EndIf}
+  ${EndIf}
+  ${If} ${FileExists} "${DIR}\POUH.exe"
+    !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POUH.exe"
+    Pop $R0
     ${If} $0 == 1
       Delete "${SHORTCUT}"
     ${EndIf}
@@ -313,7 +362,7 @@ FunctionEnd
     DetailPrint "Sustituyendo ${NAME} (MSI). Se conservarán los datos."
     ExecWait '$\"$SYSDIR\msiexec.exe$\" /x $0 /qn /norestart' $4
     ${If} $4 != 0
-    ${ElseIf} $4 != 3010
+    ${AndIf} $4 != 3010
       MessageBox MB_ICONSTOP "No se pudo sustituir ${NAME} (MSI). Cierra la versión anterior y vuelve a intentarlo."
       Abort
     ${EndIf}
