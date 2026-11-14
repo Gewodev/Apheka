@@ -1,7 +1,7 @@
 ﻿{
     "version":  "6.27.0",
     "embeddedFrontendAssets":  [
-                                   "assets/index-DOyZkZ-G.js",
+                                   "assets/index-CvPjkTmv.js",
                                    "assets/charts-DKJleKn1.js",
                                    "assets/anim-jyow7flR.js",
                                    "assets/tauri-DydacIQc.js",
@@ -12,14 +12,14 @@
                                ],
     "file":  "west_FINAL.exe",
     "legacyUpgrade":  "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
-    "sha256":  "B07093B398DA6A3C7F239A60EFE9068815EAFCCC312A2410685EE9F6A15296B0",
+    "sha256":  "298352ABFF555A767742924CE89465586431F147CD78F472D60B505EB2063412",
     "dataDirectory":  "com.owa.studio (existing desktop data directory retained)",
     "manifestRewrittenBeforeFrontend":  false,
     "executable":  "West.exe",
     "product":  "West",
     "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
-    "bytes":  53460257,
-    "sourceLatestEditUtc":  "2026-11-14T00:28:06.7145961-05:00",
-    "modifiedAtUtc":  "2026-11-14T00:28:06.7145961-05:00",
+    "bytes":  53465156,
+    "sourceLatestEditUtc":  "2026-11-14T01:10:53.4085549-05:00",
+    "modifiedAtUtc":  "2026-11-14T01:10:53.4085549-05:00",
     "identifier":  "com.owa.studio"
 }
