@@ -59,6 +59,7 @@ Var /GLOBAL AphekaPreviousVersion
 ; ---------------------------------------------------------------------------
 ; Captura el historial antes de que la página de mantenimiento de Tauri
 ; pueda eliminar el registro anterior.
+; Usa solo if/else if anidados (NO goto, que es inválido en macros NSIS).
 ; ---------------------------------------------------------------------------
 Function APHEKA_CAPTURE_HISTORY
   Push $0
@@ -71,8 +72,7 @@ Function APHEKA_CAPTURE_HISTORY
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "West"
   ${If} $3 == "1"
-    StrCpy $AphekaHadPrevious "true"
-    StrCpy $AphekaPreviousName "West"
+    ; Ya está West instalado: no hay previo que reemplazar.
     Pop $3
     Pop $2
     Pop $1
@@ -82,8 +82,6 @@ Function APHEKA_CAPTURE_HISTORY
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "West"
   ${If} $3 == "1"
-    StrCpy $AphekaHadPrevious "true"
-    StrCpy $AphekaPreviousName "West"
     Pop $3
     Pop $2
     Pop $1

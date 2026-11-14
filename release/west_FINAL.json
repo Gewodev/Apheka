@@ -18,8 +18,8 @@
     "product":  "West",
     "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
     "bytes":  53443856,
-    "sha256":  "C9BBE2861FAF8CA9738EF000D36535DDA9756F2F2085EA0231FA6C984CFA7FDD",
-    "sourceLatestEditUtc":  "2026-11-14T12:58:00.0000000-05:00",
+    "sha256":  "E51F834B3D2DAE4BD5F20CA2CA0EB20BEEDCCA2ADF71DC08D91621E0F99261FE",
+    "sourceLatestEditUtc":  "2026-11-14T13:05:00.0000000-05:00",
     "modifiedAtUtc":  "2026-11-14T12:58:00.0000000-05:00",
     "identifier":  "com.owa.studio"
 }
