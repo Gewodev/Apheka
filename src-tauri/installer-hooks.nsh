@@ -194,6 +194,9 @@ FunctionEnd
         ExecWait '$3 /S /UPDATE _?=$2' $4
         ; Borra el archivo del desinstalador legacy (cmd maneja comillas)
         ExecWait 'cmd /c del /f /q $3' $4
+        ; Elimina TODA la carpeta de instalación heredada (APHEKA/POHU/…).
+        ; Los datos del usuario permanecen en com.owa.studio (AppData) y no se tocan.
+        RMDir /r "$2"
         ${If} ${Errors}
         ${OrIf} $4 != 0
           ; El desinstalador legacy no pudo correr; no abortamos, West

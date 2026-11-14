@@ -527,7 +527,10 @@ Function .onInit
       StrCpy $INSTDIR "$LOCALAPPDATA\${PRODUCTNAME}"
     !endif
 
-    Call RestorePreviousInstallLocation
+    ; No se restaura la ubicación de una instalación anterior (APHEKA/POHU/…).
+    ; West usa su propio directorio por defecto. La instalación heredada se
+    ; retira por completo desde installer-hooks.nsh antes de copiar los archivos.
+    ; Call RestorePreviousInstallLocation
   ${EndIf}
 
 
