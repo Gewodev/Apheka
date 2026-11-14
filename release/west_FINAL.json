@@ -18,8 +18,9 @@
     "executable":  "West.exe",
     "product":  "West",
     "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
-    "bytes":  53452573,
-    "sourceLatestEditUtc":  "2026-11-14T11:20:33.8312029-05:00",
-    "modifiedAtUtc":  "2026-11-14T11:20:33.8312029-05:00",
+    "bytes":  53460530,
+    "sha256":  "11824BFE826718727AFD0AEBAA6E1634A4928AEF32C1D2207E541D9F1F639ED",
+    "sourceLatestEditUtc":  "2026-11-14T12:41:00.0000000-05:00",
+    "modifiedAtUtc":  "2026-11-14T12:41:00.0000000-05:00",
     "identifier":  "com.owa.studio"
 }
