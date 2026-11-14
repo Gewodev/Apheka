@@ -1,7 +1,7 @@
 {
   "identifier": "com.owa.studio",
   "productName": "West",
-  "version": "6.27.0",
+  "version": "6.27.1",
   "bundle": {
     "resources": {
       "resources/asr/ONNX-LICENSE.txt": "asr/ONNX-LICENSE.txt"

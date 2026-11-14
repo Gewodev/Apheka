@@ -1,5 +1,5 @@
 ﻿{
-    "version":  "6.27.0",
+    "version":  "6.27.1",
     "embeddedFrontendAssets":  [
                                    "assets/index-CvPjkTmv.js",
                                    "assets/charts-DKJleKn1.js",
@@ -9,7 +9,7 @@
                                    "assets/audio-meta-CT9Hv6Ta.js",
                                    "assets/date-COeAPjBE.js",
                                    "assets/index-DgkcikND.css"
-                               ],
+                                ],
     "file":  "west_FINAL.exe",
     "legacyUpgrade":  "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
     "dataDirectory":  "com.owa.studio (existing desktop data directory retained)",
