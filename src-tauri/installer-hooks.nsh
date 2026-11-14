@@ -64,6 +64,7 @@ Var /GLOBAL AphekaPreviousVersion
 ; ---------------------------------------------------------------------------
 ; Captura el historial antes de que la página de mantenimiento de Tauri
 ; pueda eliminar el registro anterior.
+; Usa solo if/else if anidados (NO goto, que es inválido en macros NSIS).
 ; ---------------------------------------------------------------------------
 Function APHEKA_CAPTURE_HISTORY
   Push $0
@@ -76,76 +77,215 @@ Function APHEKA_CAPTURE_HISTORY
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "West"
   ${If} $3 == "1"
-    Goto done
+    ; Ya está West instalado: no hay previo que reemplazar.
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "West"
   ${If} $3 == "1"
-    Goto done
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "APHEKA"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "APHEKA"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POHU"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POHU"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "POUH"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "POUH"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OWA Studio"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OWA Studio"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKCU "OwA Project_Beta"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
+
   !insertmacro APHEKA_READ_INSTALL_RECORD HKLM "OwA Project_Beta"
   ${If} $3 == "1"
-    Goto found
+    StrCpy $AphekaHadPrevious "true"
+    StrCpy $AphekaPreviousName $0
+    StrCpy $AphekaPreviousVersion $2
+    ${If} $ReinstallPageCheck == ""
+    ${AndIf} $2 != "${VERSION}"
+      StrCpy $ReinstallPageCheck 2
+    ${EndIf}
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+    Return
   ${EndIf}
 
-  Goto done
-
-found:
-  StrCpy $AphekaHadPrevious "true"
-  StrCpy $AphekaPreviousName $0
-  StrCpy $AphekaPreviousVersion $2
-  ; Si es una versión distinta, mostrar pantalla de mantenimiento
-  ${If} $ReinstallPageCheck == ""
-  ${AndIf} $2 != "${VERSION}"
-    StrCpy $ReinstallPageCheck 2
-  ${EndIf}
-
-done:
   Pop $3
   Pop $2
   Pop $1

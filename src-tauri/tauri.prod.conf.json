@@ -6,7 +6,13 @@
     "resources": {
       "resources/asr/ONNX-LICENSE.txt": "asr/ONNX-LICENSE.txt"
     },
-    "useLocalToolsDir": true
+    "useLocalToolsDir": true,
+    "windows": {
+      "nsis": {
+        "uninstallerIcon": "icons/icon.ico",
+        "uninstallerHeaderImage": "installer-assets/header.bmp"
+      }
+    }
   },
   "mainBinaryName": "West"
 }

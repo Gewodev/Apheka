@@ -62,12 +62,7 @@ export default function MusicLinkImport(){
    </div>
    <button type="submit" className="btn-primary music-import-submit" disabled={busy||!query.trim()}>{busy?'Analizando…':isVideoLink(query.trim())?'Analizar enlace':'Buscar'}</button>
   </form>
-  <p className="music-import-hint"><Link2 size={13}/> YouTube Music, Deezer y Spotify. Al analizar un enlace se revisa la lista completa y cada canción se puede descargar por separado.</p>
-  {isSpotify&&<div className="music-import-token">
-   <header><KeyRound size={15}/><strong>Autorización de Spotify</strong></header>
-   <p>La consulta normal usa los metadatos públicos y no necesita clave. Solo si quieres leer una lista privada de tu cuenta puedes pegar aquí un token de lectura propio: se usa en esta consulta, no se guarda y no se comparte.</p>
-   <input type="password" aria-label="Token de acceso de Spotify" autoComplete="off" placeholder="Token de lectura de Spotify" value={token} onChange={e=>setToken(e.target.value)}/>
-  </div>}
+  <p className="music-import-hint"><Link2 size={13}/> YouTube Music, Deezer y Spotify. Al analizar un enlace se revisa la lista completa y cada canción se puede descargar por separado. No necesitas clave de Spotify para listas públicas.</p>
   {busy&&<div className="music-import-progress" role="status"><span className="music-import-spinner" aria-hidden="true"/>{progress||'Consultando el catálogo…'}<button className="btn-ghost" onClick={reset}>Cancelar</button></div>}
   {error&&<p role="alert" className="music-import-error">{error}</p>}
   {items.length>0&&<div className="music-link-preview">

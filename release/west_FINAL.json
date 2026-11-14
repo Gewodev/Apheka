@@ -12,14 +12,14 @@
                                ],
     "file":  "west_FINAL.exe",
     "legacyUpgrade":  "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
-    "sha256":  "5C02994EBE5C5583970E11DE7E73F0F6A3F4E747FA1326AEB726720F00C9F5F1",
+    "sha256":  "092EAC30AED9FAFF3D10D0F688BB209D9B340C076B4A15F5B444BC8810772E31",
     "dataDirectory":  "com.owa.studio (existing desktop data directory retained)",
     "manifestRewrittenBeforeFrontend":  false,
     "executable":  "West.exe",
     "product":  "West",
     "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
-    "bytes":  53467135,
-    "sourceLatestEditUtc":  "2026-11-14T08:54:19.6306228-05:00",
-    "modifiedAtUtc":  "2026-11-14T08:54:19.6306228-05:00",
+    "bytes":  53452573,
+    "sourceLatestEditUtc":  "2026-11-14T11:20:33.8312029-05:00",
+    "modifiedAtUtc":  "2026-11-14T11:20:33.8312029-05:00",
     "identifier":  "com.owa.studio"
 }
