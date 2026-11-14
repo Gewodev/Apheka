@@ -19,7 +19,6 @@ SetFont "Segoe UI" 10
 !define MUI_FINISHPAGE_RUN_TEXT "Abrir West"
 Var AphekaWelcomeTitleFont
 
-; The previous product identity, kept as a read-only fallback. An upgrade must
 !ifndef LEGACYUNINSTKEY
   !define LEGACYUNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\APHEKA"
 !endif
@@ -28,9 +27,9 @@ Var AphekaWelcomeTitleFont
 !endif
 
 !define MUI_CUSTOMFUNCTION_GUIINIT APHEKA_CAPTURE_HISTORY
-Var AphekaHadPrevious
-Var AphekaPreviousName
-Var AphekaPreviousVersion
+Var /GLOBAL AphekaHadPrevious
+Var /GLOBAL AphekaPreviousName
+Var /GLOBAL AphekaPreviousVersion
 
 ; Reads one install record. Returns 1 in $3 when the record belongs to this
 ; product family, leaving name, publisher and version in $0, $1 and $2.
@@ -108,6 +107,16 @@ Function APHEKA_MIGRATE_INSTALLMODE
   ${EndIf}
 FunctionEnd
 
+; Muestra una ventana de confirmación cuando se detecta una instalación previa
+; (APHEKA, POHU, POUH u OWA Studio). El usuario debe aceptar que West la
+; reemplazará. Nunca se borran los datos del usuario (com.owa.studio en AppData).
+Function APHEKA_CONFIRM_REPLACE
+  StrCmp $AphekaHadPrevious "true" +2
+  Abort
+  MessageBox MB_OKCANCEL|MB_ICONQUESTION "Se detectó una instalación previa de una versión anterior de este producto.$\r$\n$\r$\nWest la reemplazará en este mismo equipo.$\r$\nTus notas, cursos, archivos y conversaciones se conservan en su carpeta de datos.$\r$\n$\r$\n¿Desea continuar con la instalación de West?" IDOK +2
+  Abort
+FunctionEnd
+
 ; Borra los accesos directos de una instalacion heredada concreta. Solo se
 ; borran los que apuntan a los binarios de esta misma familia dentro de la
 ; carpeta exacta que registro esa instalacion: un acceso directo ajeno que
@@ -119,22 +128,22 @@ FunctionEnd
   ${OrIf} ${FileExists} "${DIR}\POHU.exe"
   ${OrIf} ${FileExists} "${DIR}\POUH.exe"
     !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\owa-studio.exe"
-    Pop $0
+    Pop $R0
     ${If} $0 != 1
       !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\${NAME}.exe"
-      Pop $0
+      Pop $R0
     ${EndIf}
     ${If} $0 != 1
       !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\APHEKA.exe"
-      Pop $0
+      Pop $R0
     ${EndIf}
     ${If} $0 != 1
       !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POHU.exe"
-      Pop $0
+      Pop $R0
     ${EndIf}
     ${If} $0 != 1
       !insertmacro IsShortcutTarget "${SHORTCUT}" "${DIR}\POUH.exe"
-      Pop $0
+      Pop $R0
     ${EndIf}
     ${If} $0 == 1
       Delete "${SHORTCUT}"
@@ -234,6 +243,7 @@ FunctionEnd
     StrCpy $AphekaPreviousVersion ""
   ${EndIf}
   Call APHEKA_CAPTURE_HISTORY
+  Call APHEKA_CONFIRM_REPLACE
   ${If} ${FileExists} "$LOCALAPPDATA\com.owa.studio\apheka-installed.txt"
   ${OrIf} ${FileExists} "$APPDATA\com.owa.studio\owa_studio_data.json"
   ${OrIf} ${FileExists} "$LOCALAPPDATA\com.owa.studio\EBWebView\Default\Preferences"
@@ -264,26 +274,26 @@ FunctionEnd
 
 !macro APHEKA_REMOVE_OWNED_SHORTCUT SHORTCUT
   !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\${MAINBINARYNAME}.exe"
-  Pop $0
+  Pop $R0
   ${If} $0 != 1
     !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\owa-studio.exe"
-    Pop $0
+    Pop $R0
   ${EndIf}
   ${If} $0 != 1
     !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\APHEKA.exe"
-    Pop $0
+    Pop $R0
   ${EndIf}
   ${If} $0 != 1
     !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\POHU.exe"
-    Pop $0
+    Pop $R0
   ${EndIf}
   ${If} $0 != 1
     !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\POUH.exe"
-    Pop $0
+    Pop $R0
   ${EndIf}
   ${If} $0 != 1
     !insertmacro IsShortcutTarget "${SHORTCUT}" "$INSTDIR\OWA Studio.exe"
-    Pop $0
+    Pop $R0
   ${EndIf}
   ${If} $0 == 1
     Delete "${SHORTCUT}"
@@ -324,10 +334,6 @@ FunctionEnd
   ${EndIf}
 
   ${GetTime} "" "L" $0 $1 $2 $3 $4 $5 $6
-  ; The previous product key only held the install folder and the installer
-  ; language. West already stores both, so the old key is retired here.
-  DeleteRegKey HKCU "${LEGACYPRODUCTKEY}"
-  DeleteRegKey HKLM "${LEGACYPRODUCTKEY}"
   FileOpen $7 "$INSTDIR\apheka-install.json" w
   FileWrite $7 '{$\"version$\":$\"${VERSION}$\",$\"installationId$\":$\"${VERSION}-$2$1$0-$4$5$6$\",$\"hadPreviousInstall$\":$AphekaHadPrevious,$\"previousName$\":$\"$AphekaPreviousName$\",$\"previousVersion$\":$\"$AphekaPreviousVersion$\"}'
   FileClose $7

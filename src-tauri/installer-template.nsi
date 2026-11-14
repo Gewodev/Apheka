@@ -74,11 +74,11 @@ Var ReinstallPageCheck
 !include "{{installer_hooks}}"
 {{/if}}
 
-Var PassiveMode
-Var UpdateMode
-Var NoShortcutMode
-Var WixMode
-Var OldMainBinaryName
+Var /GLOBAL PassiveMode
+Var /GLOBAL UpdateMode
+Var /GLOBAL NoShortcutMode
+Var /GLOBAL WixMode
+Var /GLOBAL OldMainBinaryName
 
 Name "${PRODUCTNAME}"
 BrandingText "West ${VERSION} · Gewodev"

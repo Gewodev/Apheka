@@ -1,5 +1,4 @@
 import MusicConnectionSettings from '../music/MusicConnectionSettings';
-import CommandsSettings from '../ui/CommandsSettings';
 import AppearanceStudio from '../ui/AppearanceStudio';
 import {useAppSlice} from "../../store/AppContext";
 import BackgroundGallery from '../ui/BackgroundGallery';
@@ -12,7 +11,7 @@ import WorkspaceHeader from '../ui/WorkspaceHeader';
 ﻿import React, { useEffect, useState, useRef, useMemo } from 'react';
 import LiveClock from '../ui/LiveClock';
 import {
-  User, Palette, Brain, Download, Bell, Search, Keyboard,
+  User, Palette, Brain, Download, Bell, Search,
   Moon, Sun,
   Timer, Zap,
   RefreshCw, Shield, ShieldCheck,
@@ -47,14 +46,13 @@ import LocalDictationCard from '../ui/LocalDictationCard';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones' | 'comandos';
+type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
 
 const TABS: { id: SettingsTab; label: string; desc: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> }[] = [
   { id: 'perfil', label: 'Perfil', desc: 'Tu nombre, portada y cuenta', icon: User },
   { id: 'apariencia', label: 'Apariencia', desc: 'Tema, tipografía y estilo', icon: Palette },
   { id: 'estudio', label: 'Estudio', desc: 'Pomodoro, metas y enfoque', icon: Brain },
   { id: 'musica', label: 'Música', desc: 'Reproducción, biblioteca y descargas', icon: Music },
-  { id: 'comandos', label: 'Comandos', desc: 'Atajos y acceso rápido al horario', icon: Keyboard },
   { id: 'sistema', label: 'Sistema', desc: 'Datos, respaldos y herramientas', icon: Shield },
   { id: 'notificaciones', label: 'Sonidos y Alertas', desc: 'Tonos y avisos por sección', icon: Bell },
 ];
@@ -712,7 +710,6 @@ export default function Ajustes() {
           {activeTab!=='perfil'&&<header className="settings-section-heading"><h2>{TABS.find(t=>t.id===activeTab)?.label}</h2><p>{TABS.find(t=>t.id===activeTab)?.desc}</p>{settingsOutline.length>0&&<span>{settingsOutline.length} secciones</span>}</header>}
           <div className="settings-panels">
           <div key={activeTab}>
-            {activeTab==='comandos'&&<CommandsSettings/>}
 
             {/* â•â•â•â•â•â•â•â•â•â•â• PERFIL â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'perfil' && (
