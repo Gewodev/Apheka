@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "6.27.6",
+    "version":  "6.27.7",
     "embeddedFrontendAssets":  [
-                                       "assets/index-DkObOzja.js",
+                                       "assets/index-D5OAnzXC.js",
                                        "assets/charts-DKJleKn1.js",
                                        "assets/anim-jyow7flR.js",
                                        "assets/tauri-BKDvjPng.js",
@@ -18,8 +18,8 @@
     "product":  "West",
     "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
     "bytes":  53585910,
-    "sha256":  "259A96568334BED95A95B20E5ED0625551EAEF483263688812F55DFD98FAA2E0",
-    "sourceLatestEditUtc":  "2026-11-15T10:15:00.0000000-05:00",
+    "sha256":  "DD98876FEC9CC4342D5E7974AC4E12875E6D0CDA6B3026463AB9BF869B006254",
+    "sourceLatestEditUtc":  "2026-11-15T13:15:00.0000000-05:00",
     "modifiedAtUtc":  "2026-11-14T20:59:14.0000000-05:00",
     "identifier":  "com.owa.studio"
 }

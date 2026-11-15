@@ -7,7 +7,7 @@
   --workspace-radius: 6px;
 }
 body { font-size:13px; }
-.sidebar { width:236px; background:var(--bg-base); }
+.sidebar { width: var(--navigation-width, 236px); background:var(--bg-base); }
 .sidebar::after { background:var(--workspace-line); }
 .sidebar-logo { height:82px; gap:12px; padding-top:0; }
 .apheka-wordmark { font-size:25px; font-weight:700; letter-spacing:-.035em; gap:.11em; line-height:1; }

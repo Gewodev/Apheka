@@ -1508,12 +1508,21 @@ export default function Ajustes() {
                 </div>
 
                 <PointerSettings />
+
+                {/* ── Grupo 1: Información principal ── */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Información principal</span>
+                  </div>
+                </div>
+
                 {/* App info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <CardHeader icon={<AppWindow size={14} />} title="Sobre West" desc="Aplicación instalada" />
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                     <InfoRow label="Nombre" value={appInfo?.name || 'West'} mono />
-                    <InfoRow label="Versión" value={appInfo?.version || '6.7'} mono />
+                    <InfoRow label="Versión" value={appInfo?.version || '6.27.7'} mono />
                     <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
                     <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} mono />
                   </div>
@@ -1529,6 +1538,14 @@ export default function Ajustes() {
                       {checkingUpdates ? <Loader2 size={14} className="spin"/> : <RefreshCw size={14}/>}
                       {checkingUpdates ? 'Comprobando…' : 'Buscar actualizaciones'}
                     </button>
+                  </div>
+                </div>
+
+                {/* ── Grupo 2: Almacenamiento y rendimiento ── */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Almacenamiento y rendimiento</span>
                   </div>
                 </div>
 
