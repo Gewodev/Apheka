@@ -31,13 +31,35 @@ export const updaterSupported = (): boolean => isTauri();
 /** Consulta el endpoint configurado. Nunca lanza: un fallo de red no rompe la app. */
 export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | null; currentVersion: string; error?: string; errorCode?: string }> {
   if (!isTauri()) return { update: null, currentVersion: '', error: 'Las actualizaciones solo están disponibles en la aplicación de escritorio.', errorCode: 'not_tauri' };
+  
   try {
     const currentVersion = await getVersion();
+    
+    // Primero verificamos si el manifiesto latest.json existe haciendo una petición HEAD/GET directa
+    // Esto evita el falso "no_update" cuando el release no existe (404)
+    const manifestUrl = 'https://github.com/AuthomiaAgency/Owa_Studio/releases/latest/download/latest.json';
+    let manifestExists = false;
+    try {
+      const response = await fetch(manifestUrl, { method: 'HEAD', cache: 'no-cache' });
+      manifestExists = response.ok;
+    } catch {
+      manifestExists = false;
+    }
+    
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check({ timeout });
     
-    // update es null si no hay versión nueva O si hay error de red/configuración
-    // El plugin de Tauri no distingue claramente, así que analizamos el error si lo hay
+    // Si el manifiesto NO existe en GitHub, es un error de configuración, no "no hay update"
+    if (!manifestExists) {
+      return { 
+        update: null, 
+        currentVersion, 
+        error: 'No hay releases publicados con información de actualización. El servidor no tiene latest.json configurado.', 
+        errorCode: 'not_found' 
+      };
+    }
+    
+    // Si el manifiesto existe pero update es null, realmente no hay versión nueva
     if (!update) {
       return { 
         update: null, 
