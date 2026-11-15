@@ -732,16 +732,19 @@ export default function Ajustes() {
 
                 {/* Avatar + Nombre + Foto */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
-                  <div style={{ flexShrink: 0 }}>
+                  <div style={{ flexShrink: 0, position: 'relative' }}>
                     {settings.profilePhoto ? (
-                      <div style={{ width: 108, height: 108, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 8px 24px rgba(0,0,0,0.25)', background: 'var(--bg-deep)' }}>
+                      <div style={{ width: 128, height: 128, borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 12px 32px rgba(0,0,0,0.3)', background: 'var(--bg-deep)' }}>
                         <img src={settings.profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
                       </div>
                     ) : (
-                      <div style={{ width: 108, height: 108, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 500, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
+                      <div style={{ width: 128, height: 128, borderRadius: '50%', background: 'var(--accent-dim)', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48, fontWeight: 500, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
                         {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'O'}
                       </div>
                     )}
+                    <button onClick={() => profilePhotoInputRef.current?.click()} style={{ position: 'absolute', bottom: 0, right: 0, width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)', border: '3px solid var(--bg-base)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', transition: 'transform 150ms, box-shadow 150ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'} aria-label={settings.profilePhoto ? 'Cambiar foto' : 'Subir foto'}>
+                      <Upload size={16} />
+                    </button>
                     <input ref={profilePhotoInputRef} type="file" accept="image/*" onChange={handleProfilePhotoUpload} style={{ display: 'none' }} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -749,20 +752,20 @@ export default function Ajustes() {
                       <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
                       <input type="text" aria-label="Tu nombre" maxLength={80} value={settings.userName}
                         onChange={e => updateSettings({ userName: e.target.value })}
-                        className="input-base" style={{ width: '100%', height: 40, fontSize: 14, fontWeight: 500 }}
+                        className="input-base" style={{ width: '100%', height: 48, fontSize: 18, fontWeight: 600, padding: '0 16px' }}
                         placeholder="Tu nombre" />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <button data-ui-control="" onClick={() => profilePhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', transition: 'all 150ms' }}>
-                        <Image size={14} /> {settings.profilePhoto ? 'Cambiar foto' : 'Subir foto desde tu equipo'}
+                      <button data-ui-control="" onClick={() => profilePhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', transition: 'all 150ms' }}>
+                        <Image size={14} /> {settings.profilePhoto ? 'Cambiar foto' : 'Subir foto'}
                       </button>
                       {settings.profilePhoto && (
-                        <button data-ui-control="" onClick={() => updateSettings({ profilePhoto: undefined })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#EF4444', transition: 'all 150ms' }}>
-                          <Trash2 size={13} /> Quitar
+                        <button data-ui-control="" onClick={() => updateSettings({ profilePhoto: undefined })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#EF4444', transition: 'all 150ms' }}>
+                          <Trash2 size={13} /> Quitar foto
                         </button>
                       )}
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 200 }}>
-                        Se guarda localmente en tu dispositivo. JPG, PNG o WebP (máx. 5 MB).
+                        JPG, PNG o WebP (máx. 5 MB). Se guarda localmente.
                       </span>
                     </div>
                   </div>
@@ -770,7 +773,7 @@ export default function Ajustes() {
 
                 {/* Connected Services */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Autenticación y Nube</h3>
+                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Cuentas Conectadas</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Google */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
@@ -1502,18 +1505,24 @@ export default function Ajustes() {
                 {/* App info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <CardHeader icon={<AppWindow size={14} />} title="Sobre West" desc="Aplicación instalada" />
-                  <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                     <InfoRow label="Nombre" value={appInfo?.name || 'West'} mono />
                     <InfoRow label="Versión" value={appInfo?.version || '6.7'} mono />
                     <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
-                                        <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} last />
+                    <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} mono />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
-                    <button className="btn-secondary" data-ui-control="" onClick={() => { void checkUpdates(); }} disabled={checkingUpdates || !isTauri()}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <RefreshCw size={16} style={{ color: 'var(--accent)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Actualizaciones</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block' }}>{updateNote || 'West se actualiza automáticamente. También puedes comprobar manualmente.'}</span>
+                    </div>
+                    <button className="btn-primary" data-ui-control="" onClick={() => { void checkUpdates(); }} disabled={checkingUpdates || !isTauri()}>
                       {checkingUpdates ? <Loader2 size={14} className="spin"/> : <RefreshCw size={14}/>}
                       {checkingUpdates ? 'Comprobando…' : 'Buscar actualizaciones'}
                     </button>
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{updateNote || 'Las novedades aparecen arriba, en Notificaciones.'}</span>
                   </div>
                 </div>
 
