@@ -57,7 +57,7 @@ const TABS: { id: SettingsTab; label: string; desc: string; icon: React.Componen
   { id: 'estudio', label: 'Estudio', desc: 'Pomodoro, metas y enfoque', icon: Brain },
   { id: 'musica', label: 'Música', desc: 'Reproducción, biblioteca y descargas', icon: Music },
   { id: 'sistema', label: 'Sistema', desc: 'Datos, respaldos y herramientas', icon: Shield },
-  { id: 'notificaciones', label: 'Sonidos y Alertas', desc: 'Tonos y avisos por sección', icon: Bell },
+  { id: 'notificaciones', label: 'Notificaciones', desc: 'Tonos y avisos por sección', icon: Bell },
 ];
 
 const FONTS = [

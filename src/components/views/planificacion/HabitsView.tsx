@@ -1,4 +1,4 @@
-import HabitModes from './HabitModes';
+// import HabitModes from './HabitModes'; // Solo en Ajustes > Planificador
 import {useAppSlice} from "../../../store/AppContext";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Pencil, Archive, RefreshCcw, ArchiveRestore, Check, X } from 'lucide-react';
@@ -152,7 +152,7 @@ export default function HabitsView() {
 
       {/* Grid */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-        {!showArchived&&<HabitModes date={format(focusDate,'yyyy-MM-dd')}/>}
+        {/* HabitModes solo en Ajustes > Planificador */}
         <div style={{ borderRadius: 12, border: '1px solid var(--border-soft)', overflow: 'hidden', background: 'color-mix(in srgb, var(--bg-elevated) 50%, transparent)' }}>
           {/* Header row */}
           <div style={{ ...rowStyle, borderBottom: '2px solid var(--border-soft)', background: 'color-mix(in srgb, var(--bg-elevated) 70%, transparent)', position: 'sticky', top: 0, zIndex: 2 }}>

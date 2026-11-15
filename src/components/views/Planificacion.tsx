@@ -1269,7 +1269,7 @@ export default function Planificacion() {
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
                       const linkedTaskIds = new Set(dayEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
                       const dayTasks=(tasksByDate.get(iso)||[]).filter(t=>!linkedTaskIds.has(t.id));
-                      const daySessions=getPlannedSessionsForDate(iso),shownSessions=daySessions.slice(0,3),shownEvents=dayEvs.slice(0,3-shownSessions.length),shownTasks=dayTasks.slice(0,3-shownSessions.length-shownEvents.length);
+                      const daySessions=getPlannedSessionsForDate(iso),shownSessions=daySessions.slice(0,4),shownEvents=dayEvs.slice(0,4-shownSessions.length),shownTasks=dayTasks.slice(0,4-shownSessions.length-shownEvents.length);
                       const hiddenItems=daySessions.length+dayEvs.length+dayTasks.length-shownSessions.length-shownEvents.length-shownTasks.length;
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
@@ -1641,12 +1641,12 @@ function AllDayBar({ events, plannedSessions, onSelectEvent }: { onSelectEvent: 
       {events.map(ev=>(
         <button data-ui-control="" type="button" key={ev.id} onClick={e => { e.stopPropagation(); onSelectEvent(ev); }} title={ev.title} style={{ cursor:'pointer', border:'none', textAlign:'left', fontSize:11, padding:'4px 6px', borderRadius:4, background:`${ev.color}15`, borderLeft:`2px solid ${ev.color}`, color:ev.color, maxWidth:80, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:600 }}>{ev.title}</button>
       ))}
-      {ps.slice(0, 2).map(s => (
+      {ps.slice(0, 4).map(s => (
         <div key={s.id} style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: 'rgba(139,92,246,0.08)', borderLeft: '2px solid rgba(139,92,246,0.3)', color: 'rgba(139,92,246,0.7)', maxWidth: 80, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
           {s.title || s.type}
         </div>
       ))}
-      {ps.length > 2 && <div style={{ fontSize: 8, color: 'rgba(139,92,246,0.5)', fontWeight: 500 }}>+{ps.length - 2}</div>}
+      {ps.length > 4 && <div style={{ fontSize: 8, color: 'rgba(139,92,246,0.5)', fontWeight: 500 }}>+{ps.length - 4}</div>}
     </div>
   );
 }

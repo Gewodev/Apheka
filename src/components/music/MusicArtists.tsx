@@ -15,7 +15,7 @@ import {canPlayOffline} from '../../lib/musicAvailability';
 import {isLibraryTrack,libraryRadioOrder} from '../../lib/musicRadio';
 import {libraryArtistMatch,pinnedArtists,artistCollectionMatch} from '../../lib/artistIdentity';
 type Evidence='chosen'|'library'|'catalog'|'pending';
-const EVIDENCE_LABEL:Record<Evidence,string>={chosen:'Elegida por ti',library:'En tu biblioteca',catalog:'Verificada por el catálogo',pending:'Sin datos verificables'};
+const EVIDENCE_LABEL:Record<Evidence,string>={chosen:'',library:'',catalog:'Verificada',pending:'Sin datos'};
 export default function MusicArtists(){
  const a=useAppSlice(['tracks','artists','updateArtist','playTrack','setMusicQueue','setQueueSource','queueSource','settings','setRepeatMode','trackHistory','playCounts','addTrack','updateTrack']);
  const [query,setQuery]=useState(''),[selected,setSelected]=useState<string|null>(null),[edit,setEdit]=useState(false),[ids,setIds]=useState<string[]>([]),[songQuery,setSongQuery]=useState(''),[artistSongQuery,setArtistSongQuery]=useState(''),[profile,setProfile]=useState<{name:string;image?:string}|null>(null),[addSource,setAddSource]=useState<'biblioteca'|'online'>('biblioteca'),[onlineQuery,setOnlineQuery]=useState(''),[onlineIds,setOnlineIds]=useState<string[]>([]),dialog=useRef<HTMLFormElement>(null),profileDialog=useRef<HTMLFormElement>(null);
