@@ -11,13 +11,14 @@ import {primeStudyAlarm} from './lib/studyAlarm';
 import MediaDownloadBridge from './components/music/MediaDownloadBridge';
 import CatalogDownloadBridge from './components/music/CatalogDownloadBridge';
 import {useWallpaperPalette} from './hooks/useWallpaperPalette';
-import {useAppSlice} from './store/AppContext';
+import {useAppSlice,useAppSnapshot} from './store/AppContext';
 import {useWorkspaceNavigation} from './hooks/useWorkspaceNavigation';
 import {useAutoDock} from './hooks/useAutoDock';
 import WorkspaceLauncher from './components/ui/WorkspaceLauncher';
 import AnimatedWallpaper from './components/AnimatedWallpaper';
 import EditorBlockMenu from './components/ui/EditorBlockMenu';
 import ReleaseNotice from './components/ui/ReleaseNotice';
+import UpdateNotice from './components/ui/UpdateNotice';
 import McpBridge from './components/McpBridge';
 import { useFullscreenLifecycle } from './hooks/useWindowFullscreen';
 import WestWordmark from './components/ui/WestWordmark';
@@ -63,7 +64,12 @@ export function AppContent() {
   useWallpaperPalette();
   const reportFullscreenError = useCallback((message: string) => { toast.error(message); }, []);
   useFullscreenLifecycle(reportFullscreenError);
-  const { hydrated, settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, trackHistory, playCounts, courseDeepLink, setCourseDeepLink, addNotification } = useAppSlice(["hydrated","settings","courses","addCourse","navigateTo","setNavigateTo","importState","updateSettings","toastMessage","deleteOldCompletedTasks","youtubeVideoUrl","setYoutubeVideoUrl","isPlayingMusic","musicVolume","setMusicDuration","setMusicProgressRaw","setIsPlayingMusic","playTrack","musicQueue","setMusicQueue","shuffleMode","repeatMode","tracks","currentTrackId","setRepeatMode","coverModalTrackId","showRestPrompt","handlePomodoroBannerClick","queueSource","trackHistory","playCounts","courseDeepLink","setCourseDeepLink","addNotification"]);
+  // Rendimiento: la raiz NO se suscribe a `tracks`, `musicQueue`, `queueSource`,
+  // `trackHistory` ni `playCounts`. Con miles de canciones cada favorito o cada
+  // import re-creaba el array y repintaba la app entera. El motor musical lee
+  // el estado vivo con `useAppSnapshot()` cuando realmente lo necesita.
+  const { hydrated, settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, setMusicQueue, repeatMode, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, courseDeepLink, setCourseDeepLink, addNotification } = useAppSlice(["hydrated","settings","courses","addCourse","navigateTo","setNavigateTo","importState","updateSettings","toastMessage","deleteOldCompletedTasks","youtubeVideoUrl","setYoutubeVideoUrl","isPlayingMusic","musicVolume","setMusicDuration","setMusicProgressRaw","setIsPlayingMusic","playTrack","setMusicQueue","repeatMode","currentTrackId","setRepeatMode","coverModalTrackId","showRestPrompt","handlePomodoroBannerClick","courseDeepLink","setCourseDeepLink","addNotification"]);
+  const readState = useAppSnapshot();
   useEffect(()=>{if(!toastMessage)return;const options={id:"apheka-system-notice"};if(toastMessage.type==='success')toast.success(toastMessage.message,options);else if(toastMessage.type==='error')toast.error(toastMessage.message,options);else toast(toastMessage.message,{...options,className:"apheka-toast-info"});},[toastMessage]);
   // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
   const aiSuspended = !useCharvisEnabled();
@@ -94,7 +100,8 @@ export function AppContent() {
   const youtubeSourceRef=useRef(youtubeVideoUrl);youtubeSourceRef.current=youtubeVideoUrl;
   const [ytMode, setYtMode] = useState<'api' | 'fallback'>('api');
   const ytRecovery=useYouTubeRecovery({
-    track:tracks.find(track=>track.id===currentTrackId),
+    track:readState().tracks.find(track=>track.id===currentTrackId),
+    getTrack:()=>readState().tracks.find(track=>track.id===readState().currentTrackId),
     url:youtubeVideoUrl,
     onUrl:setYoutubeVideoUrl,
     onStop:()=>setIsPlayingMusic(false),
@@ -102,8 +109,9 @@ export function AppContent() {
     // Cuando una grabacion no se puede reproducir, se busca otra copia y, si
     // tampoco la hay, se continua con la siguiente cancion sin molestar.
     onFallback:()=>{
-      const result=nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
-      if(!result.id||result.id===currentTrackId)return false;
+      const s=readState();
+      const result=nextMusicSelection({tracks:s.tracks,currentId:s.currentTrackId,queue:s.musicQueue,sourcePool:s.queueSource?.pool,shuffle:s.shuffleMode,repeat:s.repeatMode,history:s.trackHistory,counts:s.playCounts,offline:s.settings.musicOffline});
+      if(!result.id||result.id===s.currentTrackId)return false;
       setMusicQueue(result.queue);
       playTrack(result.id,true);
       return true;
@@ -129,22 +137,23 @@ export function AppContent() {
   }, [youtubeVideoUrl, ytMode, repeatMode]);
 
   const handleYtEnded = useCallback(() => {
+    const s=readState();
     // Repetir 1: la misma canción vuelve a empezar, sin avanzar en la cola.
-    if (repeatMode === 'one' && currentTrackId) {
+    if (s.repeatMode === 'one' && s.currentTrackId) {
       if (youtubeVideoUrl && generalYtControl.seekTo && generalYtControl.playVideo) {
         generalYtControl.seekTo(0);
         generalYtControl.playVideo();
         setIsPlayingMusic(true);
         return;
       }
-      const again = nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
+      const again = nextMusicSelection({tracks:s.tracks,currentId:s.currentTrackId,queue:s.musicQueue,sourcePool:s.queueSource?.pool,shuffle:s.shuffleMode,repeat:s.repeatMode,history:s.trackHistory,counts:s.playCounts,offline:s.settings.musicOffline});
       if (again.id) { setMusicQueue(again.queue); playTrack(again.id,true); setIsPlayingMusic(true); return; }
     }
-    const selected=nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
+    const selected=nextMusicSelection({tracks:s.tracks,currentId:s.currentTrackId,queue:s.musicQueue,sourcePool:s.queueSource?.pool,shuffle:s.shuffleMode,repeat:s.repeatMode,history:s.trackHistory,counts:s.playCounts,offline:s.settings.musicOffline});
     setMusicQueue(selected.queue);
-    if(selected.id===currentTrackId&&selected.id&&youtubeVideoUrl){generalYtControl.seekTo?.(0);generalYtControl.playVideo?.();setIsPlayingMusic(true);return;}
+    if(selected.id===s.currentTrackId&&selected.id&&youtubeVideoUrl){generalYtControl.seekTo?.(0);generalYtControl.playVideo?.();setIsPlayingMusic(true);return;}
     if(selected.id)playTrack(selected.id,true);else setIsPlayingMusic(false);
-  },[tracks,currentTrackId,musicQueue,queueSource,shuffleMode,repeatMode,trackHistory,playCounts,settings.musicOffline,setMusicQueue,youtubeVideoUrl,setYoutubeVideoUrl,playTrack,setIsPlayingMusic]);
+  },[readState,youtubeVideoUrl,setMusicQueue,playTrack,setIsPlayingMusic]);
   const handleYtEndedRef = useRef(handleYtEnded);
   handleYtEndedRef.current = handleYtEnded;
 
@@ -735,6 +744,7 @@ export function AppContent() {
             style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, border: 0, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />
         )}
         <ReleaseNotice/>
+        <UpdateNotice/>
         <MediaDownloadBridge/><GlobalPlayer sidebarCollapsed={isCollapsed} />
         <TrackArtworkDialog/>
         <HabitReminderHost/><SchedulePeek onConfigure={()=>{try{localStorage.setItem('owa_show_schedule','true');}catch{}setActiveView('planificacion');window.dispatchEvent(new Event('apheka:open-schedule'));}}/>

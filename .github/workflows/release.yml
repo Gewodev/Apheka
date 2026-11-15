@@ -1,85 +1,92 @@
-name: Build & Release
+name: West Release
+
+# Publica una version de West en GitHub Releases y deja listo el manifiesto
+# `latest.json` que la app consulta para ofrecer "Actualizar" dentro de si.
+#
+# Flujo recomendado:
+#   1. Sube los cambios a `main`.
+#   2. Ejecuta este workflow manualmente (Actions -> West Release -> Run) o
+#      crea la etiqueta `v6.27.2` y subela.
+#   3. Cuando la app este abierta, aparecera el aviso "Actualizar".
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version a publicar (por ejemplo 6.27.2)'
+        required: true
+        type: string
+      publish:
+        description: 'Publicar el release inmediatamente (sin dejar en borrador)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    strategy:
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Compilar y publicar West
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Repositorio
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 11
 
-      - uses: actions/setup-node@v4
+      - name: Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Dependencias
+        run: pnpm install --frozen-lockfile
 
-      - name: Install deps
-        run: pnpm install
-
-      - name: Build & bundle
-        run: pnpm tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-
-      - name: Upload installer as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: installer-${{ matrix.os }}
-          path: src-tauri/target/release/bundle/
-
-  create-release:
-    needs: release
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: installer-*
-          merge-multiple: true
-
-      - name: Generate updater JSON
-        id: updater
+      - name: Determinar version
+        id: version
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace '^v', ''
-          $msi = Get-ChildItem -Filter "*.msi" | Select-Object -First 1
-          $sig = Get-ChildItem -Filter "*.sig" | Select-Object -First 1
-          $sigContent = Get-Content $sig.FullName -Raw
-          $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-          $json = @{
-            version = $version
-            notes = "Nueva versión $version"
-            pub_date = $pubDate
-            platforms = @{
-              "windows-x86_64" = @{
-                signature = $sigContent.Trim()
-                url = "https://github.com/AuthomiaAgency/Owa_Studio/releases/download/$tag/$($msi.Name)"
-              }
-            }
-          }
-          $json | ConvertTo-Json | Set-Content "updater.json"
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $raw = ''
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $raw = $env:GITHUB_REF.Substring('refs/tags/v'.Length) }
+          if ($env:RELEASE_VERSION) { $raw = $env:RELEASE_VERSION }
+          $version = if ($raw) { $raw.Trim() } else { $config.version }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
 
-      - uses: softprops/action-gh-release@v2
+      - name: Fijar la version en los manifiestos
+        shell: pwsh
+        run: ./scripts/set-release-version.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      - name: Comprobar tipos
+        run: pnpm exec tsc --noEmit
+
+      - name: Compilar, firmar y publicar
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # La clave PRIVADA solo existe en los secretos del repositorio: nunca
+          # se versiona ni viaja dentro de la app. La clave PUBLICA si va dentro
+          # del instalador (src-tauri/tauri.conf.json -> bundle.updater.pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "West ${{ steps.updater.outputs.version }}"
-          draft: false
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: 'West ${{ steps.version.outputs.version }}'
+          releaseBody: |
+            West ${{ steps.version.outputs.version }}.
+
+            La app comprueba este release al arrancar y ofrece "Actualizar"
+            dentro de la propia aplicacion. Los datos del usuario (notas,
+            cursos, musica y actividad) se conservan durante la actualizacion.
+          releaseDraft: false
           prerelease: false
-          files: |
-            updater.json
-            *.msi
-            *.sig
+          args: --config src-tauri/tauri.prod.conf.json --config src-tauri/tauri.ci.conf.json --bundles nsis

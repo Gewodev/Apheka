@@ -1,0 +1,1 @@
+Moonshine Voice 0.1.5 and Spanish Tiny Streaming quantized_26_08_24. Native code and this streaming model: MIT. Legacy non-streaming Community models are not included. Sources: https://github.com/moonshine-ai/moonshine/releases/tag/v0.1.5 and https://download.moonshine.ai/model/tiny-streaming-es/quantized_26_08_24

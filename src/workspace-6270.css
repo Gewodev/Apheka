@@ -1,6 +1,7 @@
 /* APHEKA 6.27.0 polish: habit modes, download spacing and note mosaic shape. */
 
 .habit-modes{display:grid;gap:14px;margin-bottom:22px;padding:0;border:0;background:none}
+.habit-modes-note{margin:0;font:11.5px/1.65 var(--font-primary);color:var(--text-tertiary);max-width:70ch}
 .habit-mode-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
 .habit-mode-card{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:1px solid var(--border-subtle);border-radius:12px;background:var(--bg-surface);color:inherit;text-align:left;cursor:pointer;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease}
 .habit-mode-card:hover{border-color:var(--border-strong);transform:translateY(-1px)}

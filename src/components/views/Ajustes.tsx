@@ -1,4 +1,5 @@
 import MusicConnectionSettings from '../music/MusicConnectionSettings';
+import HabitModeSettings from './planificacion/HabitModeSettings';
 import AppearanceStudio from '../ui/AppearanceStudio';
 import {useAppSlice} from "../../store/AppContext";
 import BackgroundGallery from '../ui/BackgroundGallery';
@@ -34,6 +35,7 @@ import NotificationBell from '../ui/NotificationBell';
 import { copyFile, mkdir, exists, readFile, writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { appCacheDir, appConfigDir, appDataDir, appLocalDataDir, appLogDir, resourceDir, join, extname } from '@tauri-apps/api/path';
 import { getVersion, getName, getTauriVersion } from '@tauri-apps/api/app';
+import { updaterStore } from '../../lib/updaterStore';
 import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import {
   signIn, signOut, isSignedIn, onAuthChange, configureGoogle, restoreSession,
@@ -46,11 +48,12 @@ import LocalDictationCard from '../ui/LocalDictationCard';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
+type SettingsTab = 'perfil' | 'apariencia' | 'planificador' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
 
 const TABS: { id: SettingsTab; label: string; desc: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> }[] = [
   { id: 'perfil', label: 'Perfil', desc: 'Tu nombre, portada y cuenta', icon: User },
   { id: 'apariencia', label: 'Apariencia', desc: 'Tema, tipografía y estilo', icon: Palette },
+  { id: 'planificador', label: 'Planificador', desc: 'Hábitos, horario y agenda', icon: CalendarDays },
   { id: 'estudio', label: 'Estudio', desc: 'Pomodoro, metas y enfoque', icon: Brain },
   { id: 'musica', label: 'Música', desc: 'Reproducción, biblioteca y descargas', icon: Music },
   { id: 'sistema', label: 'Sistema', desc: 'Datos, respaldos y herramientas', icon: Shield },
@@ -221,8 +224,8 @@ export default function Ajustes() {
     triggerDriveBackup, exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
-    tracks, updateTrack, addTrack, courses, studySessions, plannedSessions, artists, playlists,
-  } = useAppSlice(["settings","updateSettings","googleConnected","setGoogleConnected","setCalendarSyncEnabled","lastCalendarSync","setLastCalendarSync","calendarSyncEnabled","triggerCalendarSync","importGoogleEvents","syncCalendarTwoWay","syncTasksTwoWay","triggerTasksSync","importGoogleTasks","loadGoogleProfile","importClassroomCourses","importClassroomAssignments","triggerDriveBackup","exportNotesToGoogleDoc","exportStatsToGoogleSheets","events","tasks","notes","clearAllMusicData","addNotification","deleteCompletedTasks","exportMusicLibrary","importMusicLibrary","tracks","updateTrack","addTrack","courses","studySessions","plannedSessions","artists","playlists"]);
+    tracks, updateTrack, addTrack, courses, studySessions, plannedSessions, artists, playlists, setNavigateTo,
+  } = useAppSlice(["settings","updateSettings","googleConnected","setGoogleConnected","setCalendarSyncEnabled","lastCalendarSync","setLastCalendarSync","calendarSyncEnabled","triggerCalendarSync","importGoogleEvents","syncCalendarTwoWay","syncTasksTwoWay","triggerTasksSync","importGoogleTasks","loadGoogleProfile","importClassroomCourses","importClassroomAssignments","triggerDriveBackup","exportNotesToGoogleDoc","exportStatsToGoogleSheets","events","tasks","notes","clearAllMusicData","addNotification","deleteCompletedTasks","exportMusicLibrary","importMusicLibrary","tracks","updateTrack","addTrack","courses","studySessions","plannedSessions","artists","playlists","setNavigateTo"]);
   const [pesoTick, setPesoTick] = useState(0);
 
   const [settingsSearch, setSettingsSearch] = useState('');
@@ -255,16 +258,19 @@ export default function Ajustes() {
     if (!isTauri()) { setUpdateNote('La búsqueda de actualizaciones necesita la aplicación de escritorio.'); return; }
     setCheckingUpdates(true);
     try {
-      const { getVersion } = await import('@tauri-apps/api/app');
-      const { checkAppUpdate } = await import('../../lib/appUpdate');
-      const finding = await checkAppUpdate(await getVersion());
-      if (!finding) {
-        setUpdateNote('Estís en la última versión.');
+      // Comprobacion contra GitHub Releases: el manifiesto `latest.json` se
+      // firma con la clave publica incrustada en el instalador.
+      await updaterStore.check(true);
+      const finding = updaterStore.snapshot();
+      if (finding.status === 'available') {
+        setUpdateNote(`Versión ${finding.version} disponible.`);
+        addNotification(`West ${finding.version} está listo para instalarse.`, 'info');
+      } else if (finding.status === 'up-to-date') {
+        setUpdateNote('Estás en la última versión.');
         addNotification('No hay actualizaciones disponibles.', 'info');
-        return;
+      } else if (finding.status === 'error') {
+        setUpdateNote('No se pudo comprobar si hay actualizaciones.');
       }
-      setUpdateNote(`Versión ${finding.version} disponible.`);
-      addNotification(finding.message, 'info', finding.action);
     } catch {
       setUpdateNote('No se pudo comprobar si hay actualizaciones.');
     } finally {
@@ -859,6 +865,25 @@ export default function Ajustes() {
 
             {/* Apariencia */}
             {activeTab === 'apariencia' && <AppearanceStudio/>}
+
+            {/* PLANIFICADOR */}
+            {activeTab === 'planificador' && (
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<Waves size={14} />} title="Hábitos de agua y ejercicio" desc="Activa las métricas que quieres medir cada día" />
+                  <HabitModeSettings/>
+                </div>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<CalendarDays size={14} />} title="Horario" desc="Bloques, clases y ritmo de la semana" />
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 14px', lineHeight: 1.7 }}>
+                    El horario se edita dentro del Planificador. Desde aquí puedes abrirlo directamente.
+                  </p>
+                  <button type="button" className="btn-secondary" onClick={() => { try { localStorage.setItem('owa_show_schedule', 'true'); } catch { /* noop */ } setNavigateTo('flujo'); window.dispatchEvent(new Event('apheka:open-schedule')); }}>
+                    <CalendarDays size={15}/>Abrir el horario
+                  </button>
+                </div>
+              </section>
+            )}
 
             {/* â•â•â•â•â•â•â•â•â•â•â• ESTUDIO â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'estudio' && (

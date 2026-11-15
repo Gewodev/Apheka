@@ -257,7 +257,13 @@ Function APHEKA_MIGRATE_INSTALLMODE
 FunctionEnd
 
 Function APHEKA_CONFIRM_REPLACE
-  ${If} $AphekaHadPrevious == "true"
+  ; En actualizacion silenciosa (/S, la que usa el auto-actualizador) no se
+  ; pregunta nada: el aviso bloquearia la instalacion en segundo plano.
+  StrCpy $0 "0"
+  IfSilent 0 +1
+  StrCpy $0 "1"
+  ${If} $0 == "1"
+  ${AndIf} $AphekaHadPrevious == "true"
     MessageBox MB_OKCANCEL|MB_ICONQUESTION "Se detectó una instalación previa de ${AphekaPreviousName} (${AphekaPreviousVersion}).$\r$\n$\r$\nWest la reemplazará en este mismo equipo.$\r$\nTus notas, cursos, archivos y conversaciones se conservan en su carpeta de datos.$\r$\n$\r$\n¿Desea continuar con la instalación de West?" IDOK +2
     Abort
   ${EndIf}

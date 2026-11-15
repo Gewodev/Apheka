@@ -985,10 +985,10 @@ export default function Planificacion() {
                                       background: `linear-gradient(135deg, ${col}14, ${col}05)`,
                                       borderLeft: `3px dashed ${col}99`,
                                       display:'flex', flexDirection:'column', justifyContent:'center', padding:'4px 9px', overflow:'hidden',
-                                      transition:'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.65 : 1,
+                                      transition:'background 150ms ease, border-color 150ms ease, box-shadow 150ms ease', opacity: done ? 0.65 : 1,
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.outline = `1px solid ${col}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.outline = 'none'; }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}24, ${col}0e)`; e.currentTarget.style.borderLeft = `3px solid ${col}`; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${col}2e`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.borderLeft = `3px dashed ${col}99`; e.currentTarget.style.boxShadow = 'none'; }}
                                   >
                                     <span style={{ fontSize: 10.5, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
                                       {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}
@@ -1226,10 +1226,10 @@ export default function Planificacion() {
                               background: `linear-gradient(135deg, ${col}14, ${col}05)`,
                               borderLeft: `3px dashed ${col}99`,
                               display:'flex', flexDirection:'column', justifyContent:'center', padding:'5px 11px', overflow:'hidden',
-                              transition:'background 150ms ease, outline-color 150ms ease', opacity: done ? 0.65 : 1,
+                              transition:'background 150ms ease, border-color 150ms ease, box-shadow 150ms ease', opacity: done ? 0.65 : 1,
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.outline = `1px solid ${col}59`; e.currentTarget.style.outlineOffset = '-1px'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.outline = 'none'; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}24, ${col}0e)`; e.currentTarget.style.borderLeft = `3px solid ${col}`; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${col}2e`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.borderLeft = `3px dashed ${col}99`; e.currentTarget.style.boxShadow = 'none'; }}
                           >
                             <span style={{ fontSize: 12, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
                               {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}

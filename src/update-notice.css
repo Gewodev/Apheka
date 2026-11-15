@@ -1,0 +1,17 @@
+/* West 6.27.1: aviso de actualizacion dentro de la app. */
+
+.west-update-notice{position:fixed;top:18px;right:18px;z-index:99994;width:min(360px,calc(100vw - 36px));display:grid;gap:10px;padding:16px 17px;border:1px solid var(--border-default);border-radius:14px;background:var(--bg-elevated);box-shadow:0 18px 44px rgba(0,0,0,.34);animation:westUpdateIn 240ms ease-out}
+.west-update-notice-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.west-update-notice-tag{font:500 9.5px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text-tertiary)}
+.west-update-notice-close{width:26px;height:26px;display:grid;place-items:center;border:1px solid transparent;border-radius:7px;background:none;color:var(--text-tertiary);cursor:pointer;transition:border-color 150ms ease,color 150ms ease}
+.west-update-notice-close:hover:not(:disabled){border-color:var(--border-default);color:var(--text-primary)}
+.west-update-notice-close:disabled{opacity:.4;cursor:default}
+.west-update-notice h3{margin:0;font:550 15px/1.35 var(--font-primary);letter-spacing:-.02em;color:var(--text-primary)}
+.west-update-notice p{margin:0;font:12px/1.6 var(--font-primary);color:var(--text-tertiary)}
+.west-update-notice footer{display:flex;justify-content:flex-end;gap:8px;margin-top:2px}
+.west-update-notice footer .btn-primary{display:inline-flex;align-items:center;gap:6px}
+.west-update-progress{position:relative;height:26px;border-radius:8px;background:var(--bg-deep);border:1px solid var(--border-subtle);overflow:hidden}
+.west-update-progress>span{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--accent) 26%,transparent);transition:width 220ms ease}
+.west-update-progress>small{position:absolute;inset:0;display:grid;place-items:center;font:11px/1 var(--font-mono);color:var(--text-secondary)}
+@keyframes westUpdateIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.west-update-notice{animation:none}}

@@ -817,6 +817,9 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
+        // Auto-actualizador: comprueba GitHub Releases, descarga el instalador
+        // firmado y lo aplica en caliente conservando los datos del usuario.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(DownloadState {
             active: Mutex::new(HashMap::new()),
             path: Mutex::new(default_download_path),

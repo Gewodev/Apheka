@@ -5,14 +5,33 @@ import {dailyMusicOrder} from '../../lib/dailyMusicOrder';
 import {useLocalDay} from '../../hooks/useLocalDay';
 import MusicTrackDialog from './MusicTrackDialog';
 import {isLibraryTrack} from '../../lib/musicRadio';
-import {useMemo,useState,useEffect,useRef} from 'react';
+import {memo,useMemo,useState,useEffect,useRef} from 'react';
 import { Play, Pause, Heart, Search, Music, MoreHorizontal, ChevronLeft, ChevronRight, LayoutGrid, List, FolderOpen, Upload } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { isTauri } from '@tauri-apps/api/core';
 import toast from 'react-hot-toast';
 import { useAppSlice, type Track } from '../../store/AppContext';
 import { canPlayOffline,canPlayTrack } from '../../lib/musicAvailability';
-const art = (track: Track) => track.coverImage || track.coverUrl;
+
+/**
+ * Fila de canción aislada y memorizada: con miles de canciones la lista solo
+ * repinta la fila que cambia (favorito, portada, reproducción) en vez de todo
+ * el árbol. Es la diferencia entre "arrastrar" y "se congela".
+ */
+const LibraryRow = memo(function LibraryRow({track,current,playing,hydrated,onPlay,onMore,onFavorite}:{
+  track:Track;current:boolean;playing:boolean;hydrated:boolean;
+  onPlay:(track:Track)=>void;onMore:(track:Track)=>void;onFavorite:(id:string)=>void;
+}){
+  const duration=Math.max(0,Math.floor((track.duration||0)/60))+':'+String(Math.floor((track.duration||0)%60)).padStart(2,'0');
+  return <article data-current={current}>
+    <button className="music-song-art" aria-label={'Reproducir ' + track.title} disabled={!hydrated} onClick={() => onPlay(track)}><SongArtwork track={track}/><span className="music-song-art-play">{current && playing ? <Pause size={19}/> : <Play size={19}/>}</span></button>
+    <button className="music-song-name" onClick={() => onPlay(track)}><strong>{track.title}</strong><small>{track.artist || 'Sin artista'}</small></button>
+    <span className="music-song-duration">{duration}</span>
+    <button className="music-song-favorite" aria-label={(track.isFavorite ? 'Quitar favorita: ' : 'Guardar favorita: ') + track.title} aria-pressed={track.isFavorite} onClick={() => onFavorite(track.id)}><Heart size={16} fill={track.isFavorite ? 'currentColor' : 'none'}/></button>
+    <button className="music-song-more" aria-label={'Opciones de ' + track.title} onClick={() => onMore(track)}><MoreHorizontal size={17}/></button>
+  </article>;
+},(prev,next)=>prev.track===next.track&&prev.current===next.current&&prev.playing===next.playing&&prev.hydrated===next.hydrated);
+
 export default function MusicLibrary({ workspaceId = 'default',favoritesOnly=false }: {
     workspaceId?: string;favoritesOnly?:boolean;
 }) {
@@ -57,6 +76,7 @@ export default function MusicLibrary({ workspaceId = 'default',favoritesOnly=fal
         }
     };
     const pageSize=grid?10:9,pageCount=Math.max(1,Math.ceil(tracks.length/pageSize)),currentPage=Math.min(page,pageCount),pageStart=(currentPage-1)*pageSize;
+    const visible=useMemo(()=>tracks.slice(pageStart,pageStart+pageSize),[tracks,pageStart,pageSize]);
     const play = (t: Track) => {
         if(!canPlayTrack(t,a.settings.musicOffline)){toast('Esta grabación no está disponible para reproducir.');return;}
         const eligible=scoped.filter(track=>canPlayTrack(track,a.settings.musicOffline)),ids=eligible.map(track=>track.id),sameScope=a.queueSource?.name===scopeName&&a.queueSource.pool.length===ids.length&&a.queueSource.pool.every(id=>ids.includes(id));
@@ -64,5 +84,14 @@ export default function MusicLibrary({ workspaceId = 'default',favoritesOnly=fal
         if(t.id===a.currentTrackId&&sameScope){a.toggleMusicPlayback();return;}
         a.playTrack(t.id,true);
     };
-    return <section className="music-library" aria-label="Mis canciones"><header className="music-section-heading"><span className="music-library-count">{tracks.length} {tracks.length===1?'canción':'canciones'}</span><div><button className="btn-secondary" disabled={!a.hydrated} onClick={() => void importFiles(true)}><FolderOpen size={16}/>Carpeta</button><button className="btn-primary" disabled={!a.hydrated} onClick={() => void importFiles()}><Upload size={16}/>Importar</button><details className="music-library-maintenance"><summary aria-label="Organizar biblioteca" title="Organizar biblioteca"><MoreHorizontal size={17}/></summary><div>{([['normalizeMusicFilenames','Normalizar nombres'],['removeDuplicateTracks','Quitar duplicados'],['cleanupMissingLocalFiles','Limpiar referencias ausentes']] as const).map(([method,label])=><button type="button" className="btn-secondary" key={method} disabled={saving} onClick={async()=>{setSaving(true);try{const count=await a[method]();toast.success(count+' canciones actualizadas');}catch{toast.error('No se pudo completar la operación.');}finally{setSaving(false);}}}>{label}</button>)}</div></details></div></header><div className="music-library-controls"><label className="music-local-search"><Search size={16}/><input aria-label="Buscar en mis canciones" placeholder="Buscar título o artista" value={query} onChange={e => { setQuery(e.target.value); setPage(1); }}/></label><select aria-label="Filtrar mis canciones" value={filter} onChange={e => { setFilter(e.target.value); setPage(1); }}><option value="all">Todas</option><option value="favorites">Favoritas</option><option value="offline">Sin conexión</option><option value="online">En línea</option></select><select aria-label="Artista de mis canciones" value={artist} onChange={e => { setArtist(e.target.value); setPage(1); }}><option value="">Todos los artistas</option>{artists.map(v => <option key={v}>{v}</option>)}</select><div className="music-view-toggle" role="group" aria-label="Vista de mis canciones"><button aria-label="Vista de lista musical" aria-pressed={!grid} onClick={() => {setGrid(false);setPage(1);}}><List size={17}/></button><button aria-label="Vista de portadas" aria-pressed={grid} onClick={() => {setGrid(true);setPage(1);}}><LayoutGrid size={17}/></button></div></div><div className={grid ? 'music-songs-grid' : 'music-songs-list'}>{tracks.slice(pageStart,pageStart+pageSize).map((track, index) => <article key={track.id} data-current={track.id === a.currentTrackId}><button className="music-song-art" aria-label={'Reproducir ' + track.title} disabled={!a.hydrated} onClick={() => play(track)}><SongArtwork track={track}/><span>{track.id === a.currentTrackId && a.isPlayingMusic ? <Pause size={19}/> : <Play size={19}/>}</span></button><button className="music-song-name" onClick={() => play(track)}><strong>{track.title}</strong><small>{track.artist || 'Sin artista'}</small></button><span className="music-song-duration">{Math.floor((track.duration || 0) / 60)}:{String(Math.floor((track.duration || 0) % 60)).padStart(2, '0')}</span><button className="music-song-favorite" aria-label={(track.isFavorite ? 'Quitar favorita: ' : 'Guardar favorita: ') + track.title} aria-pressed={track.isFavorite} onClick={() => a.toggleTrackFavorite(track.id)}><Heart size={16} fill={track.isFavorite ? 'currentColor' : 'none'}/></button><button className="music-song-more" aria-label={'Opciones de ' + track.title} onClick={() => { setSelected(track); }}><MoreHorizontal size={17}/></button></article>)}</div>{!tracks.length && <div className="music-empty"><Music size={34} strokeWidth={1.1}/><h3>{query || filter !== 'all' || artist ? 'No hay coincidencias.' : 'Un espacio para tu música.'}</h3><p>{query ? 'Prueba otro título o artista.' : 'Importa archivos o guarda canciones desde Descubrir.'}</p></div>}{pageCount>1&&<nav className="music-pagination" aria-label="Páginas de mis canciones"><span>{pageStart+1}–{Math.min(pageStart+pageSize,tracks.length)} de {tracks.length}</span><button aria-label="Página anterior de canciones" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}><ChevronLeft size={17}/></button><span>{currentPage} / {pageCount}</span><button aria-label="Página siguiente de canciones" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}><ChevronRight size={17}/></button></nav>}{selected && <MusicTrackDialog key={selected.id} trackId={selected.id} onClose={()=>setSelected(null)}/>}</section>;
+    const onFavorite=(id:string)=>a.toggleTrackFavorite(id);
+    const onMore=(track:Track)=>setSelected(track);
+    return <section className="music-library" aria-label="Mis canciones">
+      <header className="music-section-heading"><span className="music-library-count">{tracks.length} {tracks.length===1?'canción':'canciones'}</span><div><button className="btn-secondary" disabled={!a.hydrated} onClick={() => void importFiles(true)}><FolderOpen size={16}/>Carpeta</button><button className="btn-primary" disabled={!a.hydrated} onClick={() => void importFiles()}><Upload size={16}/>Importar</button><details className="music-library-maintenance"><summary aria-label="Organizar biblioteca" title="Organizar biblioteca"><MoreHorizontal size={17}/></summary><div>{([['normalizeMusicFilenames','Normalizar nombres'],['removeDuplicateTracks','Quitar duplicados'],['cleanupMissingLocalFiles','Limpiar referencias ausentes']] as const).map(([method,label])=><button type="button" className="btn-secondary" key={method} disabled={saving} onClick={async()=>{setSaving(true);try{const count=await a[method]();toast.success(count+' canciones actualizadas');}catch{toast.error('No se pudo completar la operación.');}finally{setSaving(false);}}}>{label}</button>)}</div></details></div></header>
+      <div className="music-library-controls"><label className="music-local-search"><Search size={16}/><input aria-label="Buscar en mis canciones" placeholder="Buscar título o artista" value={query} onChange={e => { setQuery(e.target.value); setPage(1); }}/></label><select aria-label="Filtrar mis canciones" value={filter} onChange={e => { setFilter(e.target.value); setPage(1); }}><option value="all">Todas</option><option value="favorites">Favoritas</option><option value="offline">Sin conexión</option><option value="online">En línea</option></select><select aria-label="Artista de mis canciones" value={artist} onChange={e => { setArtist(e.target.value); setPage(1); }}><option value="">Todos los artistas</option>{artists.map(v => <option key={v}>{v}</option>)}</select><div className="music-view-toggle" role="group" aria-label="Vista de mis canciones"><button aria-label="Vista de lista musical" aria-pressed={!grid} onClick={() => {setGrid(false);setPage(1);}}><List size={17}/></button><button aria-label="Vista de portadas" aria-pressed={grid} onClick={() => {setGrid(true);setPage(1);}}><LayoutGrid size={17}/></button></div></div>
+      <div className={grid ? 'music-songs-grid' : 'music-songs-list'}>{visible.map(track => <LibraryRow key={track.id} track={track} current={track.id===a.currentTrackId} playing={a.isPlayingMusic} hydrated={a.hydrated} onPlay={play} onMore={onMore} onFavorite={onFavorite}/>)}</div>
+      {!tracks.length && <div className="music-empty"><Music size={34} strokeWidth={1.1}/><h3>{query || filter !== 'all' || artist ? 'No hay coincidencias.' : 'Un espacio para tu música.'}</h3><p>{query ? 'Prueba otro título o artista.' : 'Importa archivos o guarda canciones desde Descubrir.'}</p></div>}
+      {pageCount>1&&<nav className="music-pagination" aria-label="Páginas de mis canciones"><span>{pageStart+1}–{Math.min(pageStart+pageSize,tracks.length)} de {tracks.length}</span><button aria-label="Página anterior de canciones" disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}><ChevronLeft size={17}/></button><span>{currentPage} / {pageCount}</span><button aria-label="Página siguiente de canciones" disabled={currentPage===pageCount} onClick={()=>setPage(currentPage+1)}><ChevronRight size={17}/></button></nav>}
+      {selected && <MusicTrackDialog key={selected.id} trackId={selected.id} onClose={()=>setSelected(null)}/>}
+    </section>;
 }
