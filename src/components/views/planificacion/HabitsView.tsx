@@ -1,7 +1,7 @@
 // import HabitModes from './HabitModes'; // Solo en Ajustes > Planificador
 import {useAppSlice} from "../../../store/AppContext";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Pencil, Archive, RefreshCcw, ArchiveRestore, Check, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Archive, RefreshCcw, ArchiveRestore, Check, X, Droplets, Dumbbell, Target, Zap, Flame } from 'lucide-react';
 import { useApp, Habit } from '../../../store/AppContext';
 import { startOfWeek, addDays, startOfToday, isBefore, format } from 'date-fns';
 
@@ -172,6 +172,12 @@ export default function HabitsView() {
           {/* Habit rows */}
           {displayHabits.map((habit, index) => {
             const isPast = isBefore(weekDates[0], today) && weekDates.every(d => isBefore(d, today));
+            const isWaterHabit = habit.metricKind === 'water';
+            const isExerciseHabit = habit.metricKind === 'exercise';
+            const habitColor = isWaterHabit ? '#06B6D4' : isExerciseHabit ? '#F97316' : 'var(--accent)';
+            const habitIcon = isWaterHabit ? <Droplets size={14} /> : isExerciseHabit ? <Dumbbell size={14} /> : null;
+            const weeklyDone = weekDates.filter(d => habit.completedOn.includes(format(d, 'yyyy-MM-dd'))).length;
+            const weeklyPct = Math.round((weeklyDone / 7) * 100);
             const handleRename = (newName: string) => {
               if (newName.trim() && newName.trim() !== habit.name) updateHabit(habit.id, { name: newName.trim() });
             };
@@ -197,28 +203,38 @@ export default function HabitsView() {
                     <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>{index + 1}</span>
                   )}
                 </div>
-                <HabitNameCell habit={habit} isEditing={isEditing && !showArchived} onRename={handleRename} />
+                <div style={{ ...cellStyle, justifyContent: 'flex-start', paddingLeft: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {habitIcon && <span style={{ color: habitColor }}>{habitIcon}</span>}
+                  <HabitNameCell habit={habit} isEditing={isEditing && !showArchived} onRename={handleRename} />
+                  {((isWaterHabit || isExerciseHabit) && habit.dailyGoal) && (
+                    <span style={{ fontSize: 10, fontWeight: 600, color: habitColor, background: `${habitColor}15`, padding: '2px 6px', borderRadius: 4 }}>
+                      Meta: {habit.dailyGoal}{isWaterHabit ? ' vasos' : ' min'}
+                    </span>
+                  )}
+                </div>
                 {weekDates.map((date, di) => {
                   const ds = format(date, 'yyyy-MM-dd');
                   const checked = habit.completedOn.includes(ds);
                   const isFuture = isBefore(today, date);
                   const disabled = showArchived || (isPast && !isEditing) || isFuture;
+                  const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
                   return (
                     <div key={di} style={cellStyle}>
                       <div
                         onClick={() => { if (!disabled) handleCheckbox(habit.id, di); }}
-                        style={checkboxStyle(checked, disabled)}>
+                        style={{
+                          ...checkboxStyle(checked, disabled),
+                          borderColor: checked ? habitColor : disabled ? 'var(--border-soft)' : (isToday ? 'var(--accent)' : 'var(--border-strong)'),
+                          background: checked ? habitColor : 'transparent',
+                          boxShadow: checked ? `0 0 8px ${habitColor}60` : isToday && !checked ? `0 0 0 2px ${habitColor}30` : 'none',
+                        }}>
                         {checked && <Check size={11} strokeWidth={3} style={{ color: '#fff' }} />}
                       </div>
                     </div>
                   );
                 })}
-                <div style={{ ...cellStyle, borderRight: 'none', borderLeft: '1px solid var(--border-soft)', fontSize: 13, fontWeight: 700, color: isStreakView ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {isStreakView ? computeStreak(habit.completedOn) : (() => {
-                    const weekSet = new Set(weekDates.map(d => format(d, 'yyyy-MM-dd')));
-                    const c = habit.completedOn.filter(d => weekSet.has(d)).length;
-                    return `${Math.round((c / 7) * 100)}%`;
-                  })()}
+                <div style={{ ...cellStyle, borderRight: 'none', borderLeft: '1px solid var(--border-soft)', fontSize: 13, fontWeight: 700, color: isStreakView ? 'var(--accent)' : habitColor }}>
+                  {isStreakView ? computeStreak(habit.completedOn) : `${weeklyPct}%`}
                 </div>
               </div>
             );

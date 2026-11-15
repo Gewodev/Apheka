@@ -36,7 +36,7 @@ export const updaterStore = {
   /** Comprueba el endpoint. `manual` fuerza el aviso aunque el usuario lo descartara antes. */
   async check(manual = false): Promise<void> {
     if (!updaterSupported()) {
-      if (manual) updaterStore.set({ status: 'error', error: 'Las actualizaciones automaticas solo estan disponibles en West de escritorio.' });
+      if (manual) updaterStore.set({ status: 'error', error: 'Las actualizaciones automáticas solo están disponibles en West de escritorio.' });
       return;
     }
     if (pending) return pending;
@@ -44,9 +44,23 @@ export const updaterStore = {
       updaterStore.set({ status: 'checking', error: undefined });
       const { update, currentVersion, error } = await fetchUpdate();
       if (!update) {
-        // Sin red, sin release todavia o sin version nueva: en automatico no se
-        // molesta al usuario; solo se informa cuando la comprobacion es manual.
-        updaterStore.set({ status: manual ? 'error' : 'up-to-date', currentVersion, error: manual ? 'No se pudo comprobar si hay una version nueva. Revisa tu conexion.' : undefined });
+        // Sin red, sin release todavía o sin versión nueva: en automático no se
+        // molesta al usuario; solo se informa cuando la comprobación es manual.
+        const errMsg = 'No se pudo comprobar si hay una versión nueva. Revisa tu conexión.';
+        if (manual) {
+          updaterStore.set({ status: 'error', currentVersion, error: errMsg });
+          // También notificar en el centro de notificaciones
+          if (typeof window !== 'undefined' && 'Notification' in window) {
+            try {
+              const perm = await Notification.requestPermission();
+              if (perm === 'granted') {
+                new Notification('West - Actualización', { body: errMsg, tag: 'west-update-error' });
+              }
+            } catch { /* noop */ }
+          }
+        } else {
+          updaterStore.set({ status: 'up-to-date', currentVersion, error: undefined });
+        }
         return;
       }
       const dismissed = updaterStore.dismissedVersion();
@@ -55,6 +69,19 @@ export const updaterStore = {
         return;
       }
       updaterStore.set({ status: 'available', version: update.version, currentVersion, notes: update.body, progress: 0 });
+      // Notificar en el centro de notificaciones (campanita)
+      if (!manual && typeof window !== 'undefined' && 'Notification' in window) {
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm === 'granted') {
+            new Notification(`West ${update.version} disponible`, { 
+              body: 'Se ha detectado una nueva versión. Haz clic para actualizar.', 
+              tag: 'west-update-available',
+              icon: '/icons/icon-192.png'
+            });
+          }
+        } catch { /* noop */ }
+      }
     })().finally(() => { pending = null; });
     return pending;
   },

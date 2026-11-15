@@ -1,7 +1,7 @@
 {
     "identifier":  "com.owa.studio",
     "productName":  "West",
-    "version":  "6.27.2",
+    "version":  "6.27.3",
     "bundle":  {
                    "resources":  {
                                      "resources/asr/ONNX-LICENSE.txt":  "asr/ONNX-LICENSE.txt"
@@ -13,7 +13,7 @@
                                                 "uninstallerHeaderImage":  "installer-assets/header.bmp"
                                             }
                                },
-                   "createUpdaterArtifacts":  false
+                   "createUpdaterArtifacts":  true
                },
     "mainBinaryName":  "West",
     "plugins":  {

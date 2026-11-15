@@ -1,6 +1,6 @@
 {
     "productName":  "West",
-    "version":  "6.27.1",
+    "version":  "6.27.3",
     "identifier":  "com.owa.studio",
     "build":  {
                   "beforeDevCommand":  "pnpm run dev",

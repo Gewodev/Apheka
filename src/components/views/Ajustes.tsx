@@ -1,4 +1,5 @@
 import MusicConnectionSettings from '../music/MusicConnectionSettings';
+import MusicVisualizerSettings from '../music/MusicVisualizerSettings';
 import HabitModeSettings from './planificacion/HabitModeSettings';
 import AppearanceStudio from '../ui/AppearanceStudio';
 import {useAppSlice} from "../../store/AppContext";
@@ -22,7 +23,7 @@ import {
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
   CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Minus, Plus,
-  BookOpen, Sprout, Star, Waves, Leaf, Circle
+  BookOpen, Sprout, Star, Waves, Leaf, Circle, Bot
 } from 'lucide-react';
 import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
 import { useApp, fmtClock } from '../../store/AppContext';
@@ -250,6 +251,7 @@ export default function Ajustes() {
   const [serviceResults, setServiceResults] = useState<Record<string, string>>({});
   const [showClearAllMusic, setShowClearAllMusic] = useState(false);
   const [showDrawModal, setShowDrawModal] = useState(false);
+  const [showAIAssistants, setShowAIAssistants] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
   const [appInfo, setAppInfo] = useState<{ name: string; version: string; tauriVersion: string } | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -1142,6 +1144,7 @@ export default function Ajustes() {
                   </div>
                 </div>
 
+                <MusicVisualizerSettings />
                 <ToolsRepairCard />
                 <LocalDictationCard />
 
@@ -1501,7 +1504,6 @@ export default function Ajustes() {
                 </div>
 
                 <PointerSettings />
-                <AssistantWorkspace />
                 {/* App info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <CardHeader icon={<AppWindow size={14} />} title="Sobre West" desc="Aplicación instalada" />
@@ -1526,9 +1528,35 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Peso de la app */}
+                {/* Asistentes IA */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<Database size={14} />} title="Peso de la app" desc="En qué se gastan los datos guardados" />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #8B5CF6) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 16px color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+                        <Bot size={20} style={{ color: '#fff' }} />
+                      </span>
+                      <div>
+                        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>Asistentes IA</h3>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, marginBottom: 0 }}>Charvis, MCP, Jev y conexiones externas</p>
+                      </div>
+                    </div>
+                    <button className="btn-primary" data-ui-control="" onClick={() => setShowAIAssistants(true)}>
+                      <Sparkles size={14} /> Configurar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Peso de la app */}
+                <div className="bento-card" style={{ padding: '28px', border: '1px solid var(--border-soft)', background: 'linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Database size={14} />
+                    </span>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>Peso de la app</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, marginBottom: 0 }}>En qué se gastan los datos guardados</p>
+                    </div>
+                  </div>
                   {(() => {
                     const { grand, rows, barMax, keyCount, idb } = pesoStats;
                     const quota = storageQuota && storageQuota > 0 ? storageQuota : 0;
@@ -1536,46 +1564,94 @@ export default function Ajustes() {
                     const totalColor = totalPct >= 80 ? '#EF4444' : totalPct >= 55 ? '#F59E0B' : '#10B981';
                     return (
                       <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 12 }}>
-                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Peso total</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
-                            <button data-ui-control="" onClick={() => setPesoTick(t => t + 1)} title="Volver a medir" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                              <RefreshCw size={11} /> Actualizar
-                            </button>
-                          </span>
+                        {/* Total weight header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottom: '1px solid var(--border-soft)', marginBottom: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Peso total</span>
+                            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace", letterSpacing: '-0.02em' }}>{fmtBytes(grand)}</span>
+                          </div>
+                          <button data-ui-control="" onClick={() => setPesoTick(t => t + 1)} title="Volver a medir" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', transition: 'all 150ms ease' }}>
+                            <RefreshCw size={12} /> Actualizar
+                          </button>
                         </div>
+                        
+                        {/* Storage quota bar */}
                         {quota > 0 && (
-                          <div style={{ marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <div style={{ marginBottom: 24 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
-                              <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
                             </div>
-                            <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.max(0.6, totalPct)}%`, borderRadius: 6, background: totalColor, transition: 'width 400ms ease' }} />
+                            <div style={{ height: 10, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', overflow: 'hidden', position: 'relative', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
+                              <div style={{ 
+                                height: '100%', 
+                                width: `${Math.max(0.8, totalPct)}%`, 
+                                borderRadius: 5, 
+                                background: `linear-gradient(90deg, ${totalColor} 0%, color-mix(in srgb, ${totalColor} 70%, #fff) 100%)`,
+                                transition: 'width 500ms cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: `0 0 12px ${totalColor}40`,
+                                position: 'relative',
+                              }}>
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)' }} />
+                              </div>
+                              {totalPct > 5 && (
+                                <span style={{ 
+                                  position: 'absolute', 
+                                  right: 8, 
+                                  top: '50%', 
+                                  transform: 'translateY(-50%)',
+                                  fontSize: 9, 
+                                  fontWeight: 700, 
+                                  color: '#fff', 
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                                  fontFamily: "'Share Tech Mono', monospace"
+                                }}>{totalPct.toFixed(0)}%</span>
+                              )}
                             </div>
                           </div>
                         )}
-                        {rows.map(r => {
-                          const pct = grand > 0 ? (r.size / grand) * 100 : 0;
-                          return (
-                            <div key={r.label} style={{ marginBottom: 12 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 }}>
-                                <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                  <span style={{ width: 9, height: 9, borderRadius: 3, background: r.color, flexShrink: 0 }} />
-                                  {r.label}
-                                </span>
-                                <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0 }}>
-                                  {fmtBytes(r.size)} <span style={{ color: r.color }}>· {pct.toFixed(1)}%</span>
-                                </span>
+                        
+                        {/* Categories breakdown */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {rows.map(r => {
+                            const pct = grand > 0 ? (r.size / grand) * 100 : 0;
+                            const barPct = barMax > 0 ? (r.size / barMax) * 100 : 0;
+                            return (
+                              <div key={r.label} style={{ 
+                                background: 'var(--bg-deep)', 
+                                border: '1px solid var(--border-subtle)', 
+                                borderRadius: 10, 
+                                padding: '12px 14px',
+                                transition: 'all 200ms ease',
+                              }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 10 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: 3, background: r.color, flexShrink: 0, boxShadow: `0 0 8px ${r.color}60` }} />
+                                    {r.label}
+                                  </span>
+                                  <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ color: r.color }}>{fmtBytes(r.size)}</span>
+                                    <span style={{ color: r.color, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
+                                  </span>
+                                </div>
+                                <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-surface)', overflow: 'hidden', position: 'relative' }}>
+                                  <div style={{ 
+                                    height: '100%', 
+                                    width: `${Math.max(2, barPct)}%`, 
+                                    borderRadius: 3, 
+                                    background: `linear-gradient(90deg, ${r.color} 0%, color-mix(in srgb, ${r.color} 65%, transparent) 100%)`,
+                                    transition: 'width 500ms cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: `0 0 8px ${r.color}40`,
+                                  }}>
+                                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%)' }} />
+                                  </div>
+                                </div>
                               </div>
-                              <div style={{ height: 7, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 5, background: r.color, opacity: 0.85, transition: 'width 400ms ease' }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                            );
+                          })}
+                        </div>
+                        
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.6, paddingTop: 8, borderTop: '1px solid var(--border-soft)' }}>
                           {keyCount} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
                         </p>
                       </>
@@ -1807,6 +1883,29 @@ export default function Ajustes() {
               }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'var(--error)' : 'var(--border-default)', opacity: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 1 : 0.4, cursor: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'pointer' : 'not-allowed' }}>
                 Eliminar todo
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* AI Assistants Modal */}
+      {showAIAssistants && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowAIAssistants(false)}>
+          <div className="bento-card" style={{ padding: 0, width: 680, maxWidth: '95vw', maxHeight: '90vh', overflow: 'hidden', border: '1px solid var(--border-soft)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border-soft)', background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #8B5CF6) 100%)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bot size={18} style={{ color: '#fff' }} />
+                </span>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: '#fff', fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>Asistentes IA</h3>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', margin: 0 }}>Configura Charvis, MCP, Jev y conexiones externas</p>
+                </div>
+              </div>
+              <button data-ui-control="" onClick={() => setShowAIAssistants(false)} style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms' }}><X size={16}/></button>
+            </div>
+            <div style={{ padding: 24, overflow: 'auto', maxHeight: 'calc(90vh - 100px)' }}>
+              <AssistantWorkspace />
             </div>
           </div>
         </div>

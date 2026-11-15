@@ -7,9 +7,18 @@
 .download-filter-bar button{padding:0 14px!important;border-radius:8px!important}
 .download-filter-bar button[aria-pressed=true]{border-color:color-mix(in srgb,var(--accent) 45%,transparent)!important;color:var(--accent)!important}
 .download-job-list{display:grid;gap:8px}
-.download-job-list article{padding:13px 14px!important;border:1px solid var(--border-subtle)!important;border-radius:11px!important;background:var(--bg-surface)}
+.download-job-list article{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:12px;padding:12px 14px!important;border:1px solid var(--border-subtle)!important;border-radius:11px!important;background:var(--bg-surface);min-height:56px}
 .download-job-list article[data-status=pending]{border-color:color-mix(in srgb,var(--accent) 28%,transparent)!important}
 .download-job-list article:hover{border-color:var(--border-strong)!important}
+.download-job-art{width:48px;height:48px;border-radius:8px;overflow:hidden;background:var(--bg-hover);flex-shrink:0;display:grid;place-items:center}
+.download-job-art img{width:100%;height:100%;object-fit:cover;display:block}
+.download-job-content{min-width:0}
+.download-job-content strong{display:block;font:500 13px/1.3 var(--font-primary);color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.download-job-content span{display:block;font:12px/1.3 var(--font-primary);color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.download-job-content small{display:block;font:11px/1.3 var(--font-primary);color:var(--text-tertiary)}
+.download-job-content progress{width:100%;height:4px;margin-top:6px;border-radius:2px;background:var(--bg-deep)}
+.download-job-content progress::-webkit-progress-bar{background:var(--bg-deep);border-radius:2px}
+.download-job-content progress::-webkit-progress-value{background:var(--accent);border-radius:2px}
 .download-empty{margin-top:18px;padding:46px 24px!important;border:1px dashed var(--border-subtle)!important;border-radius:14px!important;background:var(--bg-surface)!important;text-align:center}
 .quiet-download-settings{gap:20px!important}
 .quiet-download-settings>header h3{font-size:15px!important}
@@ -35,7 +44,7 @@
 
 /* Collection header - large cover, prominent name */
 .playlist-import-heading{display:flex;gap:24px;align-items:flex-start;padding:24px;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);border-radius:14px 14px 0 0}
-.playlist-import-heading>img,.playlist-import-heading>.music-import-collection-art{width:140px;height:140px;object-fit:cover;border-radius:12px;flex:none;box-shadow:0 8px 24px rgba(0,0,0,0.18)}
+.playlist-import-heading>img,.playlist-import-heading>.music-import-collection-art{width:140px;height:140px;object-fit:cover;border-radius:12px;flex:none;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:grid;place-items:center}
 .playlist-import-heading>.music-import-collection-art{display:grid;place-items:center;background:var(--bg-hover);color:var(--text-muted)}
 .playlist-import-heading>div{flex:1;min-width:0}
 .music-import-collection-kind{display:inline-block;margin-bottom:8px;font:500 11px/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
@@ -50,7 +59,7 @@
 .music-import-song-row[data-selected=true]{border-color:var(--border-subtle);background:var(--bg-surface)}
 .music-import-song{flex:1;min-width:0;display:flex;align-items:center;gap:16px;cursor:pointer;padding:0!important;border-bottom:0!important}
 .music-import-song>input{flex:none;width:18px;height:18px;min-height:18px;accent-color:var(--accent);cursor:pointer}
-.music-import-song-art{flex:none;width:56px;height:56px;border-radius:9px;object-fit:cover;background:var(--bg-hover);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.music-import-song-art{flex:none;width:56px;height:56px;border-radius:9px;object-fit:cover;background:var(--bg-hover);box-shadow:0 2px 8px rgba(0,0,0,0.12);display:grid;place-items:center}
 .music-import-song-text{display:grid;gap:4px;min-width:0}
 .music-import-song-text strong{font:550 14px/1.35 var(--font-primary);color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow-wrap:anywhere}
 .music-import-song-text small{font:12px/1.4 var(--font-primary);color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -58,10 +67,10 @@
 .music-import-download:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .music-import-download:disabled{opacity:.38;cursor:default}
 
-.music-import-footer{display:flex;align-items:center;justify-content:space-between!important;gap:14px;flex-wrap:wrap;margin-top:18px;padding-top:18px;border-top:1px solid var(--border-subtle)}
-.music-import-footer>span{font:12px var(--font-primary);color:var(--text-tertiary);margin-right:0!important}
-.music-import-actions{display:flex;gap:10px;flex-wrap:wrap}
-.music-import-footer button{min-height:42px;padding:0 18px;border-radius:9px;gap:8px;font:500 12.5px var(--font-primary)}
+.music-import-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid var(--border-subtle);padding-bottom:4px}
+.music-import-footer>span{font:12px var(--font-primary);color:var(--text-tertiary);flex-shrink:0}
+.music-import-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.music-import-footer button{min-height:42px;padding:0 18px;border-radius:9px;gap:8px;font:500 12.5px var(--font-primary);white-space:nowrap}
 .music-import-save{border-color:color-mix(in srgb,var(--accent) 42%,transparent)!important;color:var(--accent)!important;background:color-mix(in srgb,var(--accent) 9%,transparent)!important}
 .music-import-save:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 15%,transparent)!important;border-color:color-mix(in srgb,var(--accent) 60%,transparent)!important}
 

@@ -31,8 +31,10 @@ export default function UpdateNotice() {
       <h3>{version ? `West ${version} está disponible` : 'Hay una versión nueva'}</h3>
       {state.status === 'downloading'
         ? <div className="west-update-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: percent + '%' }}/><small>Descargando… {percent}%</small></div>
-        : <p>{state.status === 'error' ? state.error : 'Tu notas, cursos, música y actividad se conservan durante la actualización.'}</p>}
-      {state.status !== 'downloading' && (
+        : state.status === 'error'
+          ? <p style={{color: 'var(--error)'}}>{state.error}</p>
+          : <p>Tus notas, cursos, música y actividad se conservan durante la actualización.</p>}
+      {state.status === 'available' && (
         <footer>
           <button className="btn-secondary" onClick={() => updaterStore.dismiss(version)}>Ahora no</button>
           <button className="btn-primary" onClick={() => { void updaterStore.install(); }}><Download size={15}/>Actualizar<ArrowUpRight size={15}/></button>

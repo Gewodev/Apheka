@@ -468,6 +468,20 @@ export interface Settings {
   lyricsLookup?: boolean;
   musicDownloadBudgetMB?: number;
   lyricsTextSize?: number;
+  // Music Visualizer settings
+  musicVisualizer?: {
+    enabled: boolean;
+    mode: 'orb' | 'waves' | 'particles' | 'radial' | 'bars';
+    colorScheme: 'rainbow' | 'fire' | 'ocean' | 'forest' | 'cosmic' | 'monochrome';
+    sensitivity: number;
+    smoothing: number;
+    showBeatPulse: boolean;
+    showFrequencyBars: boolean;
+    particleCount: number;
+    orbComplexity: number;
+    showOnCover: boolean;
+    showOnLyrics: boolean;
+  };
 }
 
 export interface AppNotification {

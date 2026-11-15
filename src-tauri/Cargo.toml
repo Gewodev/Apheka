@@ -1,6 +1,6 @@
 [package]
 name = "owa-studio"
-version = "6.27.2"
+version = "6.27.3"
 description = "West - Tu espacio de estudio"
 authors = ["Gewodev"]
 edition = "2021"
