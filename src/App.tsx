@@ -19,6 +19,7 @@ import AnimatedWallpaper from './components/AnimatedWallpaper';
 import EditorBlockMenu from './components/ui/EditorBlockMenu';
 import ReleaseNotice from './components/ui/ReleaseNotice';
 import UpdateNotice from './components/ui/UpdateNotice';
+import UpdateNotificationInjector from './components/ui/UpdateNotificationInjector';
 import McpBridge from './components/McpBridge';
 import { useFullscreenLifecycle } from './hooks/useWindowFullscreen';
 import WestWordmark from './components/ui/WestWordmark';
@@ -596,7 +597,7 @@ export function AppContent() {
   return (
     <div className={'app-layout studio-environment single-environment '+(autoNav?'nav-auto':'nav-pinned')+(isCollapsed?' nav-collapsed':'')} data-auto-dock={autoNav} style={{'--navigation-width':(isCollapsed?64:224)+'px'} as React.CSSProperties}>
       <AnimatedWallpaper/>
-      <NotificationNavigation/><McpBridge /><CatalogDownloadBridge/>{!aiSuspended&&<Suspense fallback={null}><CharvisSidebar pageActive={activeView==='ia'} activeView={activeView}/></Suspense>}
+      <NotificationNavigation/><McpBridge /><CatalogDownloadBridge/><UpdateNotificationInjector/>{!aiSuspended&&<Suspense fallback={null}><CharvisSidebar pageActive={activeView==='ia'} activeView={activeView}/></Suspense>}
       <EditorBlockMenu/>
       
       {autoNav&&<><button ref={dock.trigger} className="app-navigation-handle" aria-label="Abrir navegación" onClick={dock.show}><span aria-hidden="true"/></button><div className="desktop-dock-edge" aria-hidden="true" onPointerEnter={dock.show} onPointerLeave={dock.leave}/></>}

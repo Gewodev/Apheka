@@ -4,6 +4,7 @@ import {createPortal} from 'react-dom';
 import {Bell,X,Info,CheckCircle,AlertCircle,Download,RefreshCw,Loader2} from 'lucide-react';
 import {format} from 'date-fns';
 import {useApp,fmtClock} from '../../store/AppContext';
+import {updaterStore} from '../../lib/updaterStore';
 import {applyUpdate,relaunchApp} from '../../lib/appUpdate';
 
 export default function NotificationBell(){
@@ -27,11 +28,13 @@ export default function NotificationBell(){
   if(busy)return;
   if(action.kind==='relaunch'){await relaunchApp();return;}
   if(action.kind==='update'){
-    if(!action.url||!action.sha256)return;
     setBusy(true);
-    const result=await applyUpdate(action.url,action.sha256);
+    try{
+      await updaterStore.install();
+    }catch(err){
+      addNotification(String(err), 'error');
+    }
     setBusy(false);
-    addNotification(result.message,result.ok?'info':'error');
     return;
   }
   const url=action.url;if(!url)return;
