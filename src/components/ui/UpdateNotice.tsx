@@ -32,7 +32,17 @@ export default function UpdateNotice() {
       {state.status === 'downloading'
         ? <div className="west-update-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: percent + '%' }}/><small>Descargando… {percent}%</small></div>
         : state.status === 'error'
-          ? <p style={{color: 'var(--error)'}}>{state.error}</p>
+          ? <div style={{color: 'var(--error)', fontSize: 13, lineHeight: 1.6}}>
+              <p>{state.error}</p>
+              {state.errorCode && state.errorCode !== 'unknown' && (
+                <p style={{fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8}}>
+                  Código: {state.errorCode === 'network' ? 'Error de red' :
+                       state.errorCode === 'signature' ? 'Firma inválida' :
+                       state.errorCode === 'not_found' ? 'Release no encontrado' :
+                       state.errorCode === 'version' ? 'Versión no superior' : state.errorCode}
+                </p>
+              )}
+            </div>
           : <p>Tus notas, cursos, música y actividad se conservan durante la actualización.</p>}
       {state.status === 'available' && (
         <footer>

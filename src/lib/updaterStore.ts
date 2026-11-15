@@ -42,27 +42,49 @@ export const updaterStore = {
     if (pending) return pending;
     pending = (async () => {
       updaterStore.set({ status: 'checking', error: undefined });
-      const { update, currentVersion, error } = await fetchUpdate();
+      const { update, currentVersion, error, errorCode } = await fetchUpdate();
+      
+      // Si no hay update, puede ser porque no hay versión nueva (no es error)
+      // o porque hubo un error real (red, firma, etc.)
       if (!update) {
-        // Sin red, sin release todavía o sin versión nueva: en automático no se
-        // molesta al usuario; solo se informa cuando la comprobación es manual.
-        const errMsg = 'No se pudo comprobar si hay una versión nueva. Revisa tu conexión.';
+        const isRealError = errorCode && errorCode !== 'no_update';
+        
         if (manual) {
-          updaterStore.set({ status: 'error', currentVersion, error: errMsg });
-          // También notificar en el centro de notificaciones
-          if (typeof window !== 'undefined' && 'Notification' in window) {
-            try {
-              const perm = await Notification.requestPermission();
-              if (perm === 'granted') {
-                new Notification('West - Actualización', { body: errMsg, tag: 'west-update-error' });
-              }
-            } catch { /* noop */ }
+          // En comprobación manual, siempre informamos al usuario
+          if (isRealError) {
+            updaterStore.set({ status: 'error', currentVersion, error: error || 'Error desconocido al comprobar actualizaciones.', errorCode });
+            // Notificar en el centro de notificaciones solo si es error real
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+              try {
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                  new Notification('West - Actualización', { body: error, tag: 'west-update-error' });
+                }
+              } catch { /* noop */ }
+            }
+          } else {
+            // No hay versión nueva - esto es normal, no es error
+            updaterStore.set({ status: 'up-to-date', currentVersion, error: undefined });
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+              try {
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                  new Notification('West', { body: 'Estás en la última versión disponible.', tag: 'west-update-uptodate' });
+                }
+              } catch { /* noop */ }
+            }
           }
         } else {
+          // En automático: solo silenciosamente up-to-date si no hay versión nueva
+          // Si hay error real, no molestamos al usuario (se loggea en consola)
+          if (isRealError) {
+            console.warn('[Updater] Error al comprobar actualizaciones (auto):', error, errorCode);
+          }
           updaterStore.set({ status: 'up-to-date', currentVersion, error: undefined });
         }
         return;
       }
+      
       const dismissed = updaterStore.dismissedVersion();
       if (!manual && dismissed === update.version) {
         updaterStore.set({ status: 'up-to-date', version: update.version, currentVersion });

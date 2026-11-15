@@ -271,9 +271,13 @@ export default function Ajustes() {
         setUpdateNote('Estás en la última versión.');
         addNotification('No hay actualizaciones disponibles.', 'info');
       } else if (finding.status === 'error') {
-        setUpdateNote('No se pudo comprobar si hay actualizaciones.');
+        // Mostrar el error específico del updater
+        setUpdateNote(finding.error || 'No se pudo comprobar si hay actualizaciones.');
+        if (finding.errorCode && finding.errorCode !== 'unknown') {
+          console.log('[Updater] Error code:', finding.errorCode);
+        }
       }
-    } catch {
+    } catch (e) {
       setUpdateNote('No se pudo comprobar si hay actualizaciones.');
     } finally {
       setCheckingUpdates(false);

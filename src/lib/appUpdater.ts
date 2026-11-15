@@ -23,21 +23,53 @@ export type UpdaterState = {
   notes?: string;
   progress?: number;
   error?: string;
+  errorCode?: string;
 };
 
 export const updaterSupported = (): boolean => isTauri();
 
 /** Consulta el endpoint configurado. Nunca lanza: un fallo de red no rompe la app. */
-export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | null; currentVersion: string; error?: string }> {
-  if (!isTauri()) return { update: null, currentVersion: '' };
+export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | null; currentVersion: string; error?: string; errorCode?: string }> {
+  if (!isTauri()) return { update: null, currentVersion: '', error: 'Las actualizaciones solo están disponibles en la aplicación de escritorio.', errorCode: 'not_tauri' };
   try {
     const currentVersion = await getVersion();
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check({ timeout });
+    
+    // update es null si no hay versión nueva O si hay error de red/configuración
+    // El plugin de Tauri no distingue claramente, así que analizamos el error si lo hay
+    if (!update) {
+      return { 
+        update: null, 
+        currentVersion, 
+        error: 'No hay una versión nueva disponible.', 
+        errorCode: 'no_update' 
+      };
+    }
     return { update, currentVersion };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { update: null, currentVersion: '', error: message };
+    
+    // Clasificar el tipo de error para dar mensaje más específico
+    let errorCode = 'unknown';
+    let userMessage = message;
+    
+    const lowerMsg = message.toLowerCase();
+    if (lowerMsg.includes('network') || lowerMsg.includes('fetch') || lowerMsg.includes('econnrefused') || lowerMsg.includes('timeout') || lowerMsg.includes('enotfound')) {
+      errorCode = 'network';
+      userMessage = 'Error de conexión: no se pudo alcanzar el servidor de actualizaciones. Verifica tu conexión a internet.';
+    } else if (lowerMsg.includes('signature') || lowerMsg.includes('pubkey') || lowerMsg.includes('verif')) {
+      errorCode = 'signature';
+      userMessage = 'Error de verificación: la firma de la actualización no es válida.';
+    } else if (lowerMsg.includes('not found') || lowerMsg.includes('404') || lowerMsg.includes('release')) {
+      errorCode = 'not_found';
+      userMessage = 'No se encontró información de actualización. El servidor puede no tener releases configurados.';
+    } else if (lowerMsg.includes('version') || lowerMsg.includes('downgrade')) {
+      errorCode = 'version';
+      userMessage = 'La versión disponible no es más nueva que la instalada.';
+    }
+    
+    return { update: null, currentVersion: '', error: userMessage, errorCode };
   }
 }
 

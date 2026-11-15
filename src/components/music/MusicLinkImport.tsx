@@ -92,10 +92,10 @@ export default function MusicLinkImport(){
    {error&&<p role="alert" className="music-import-error">{error}</p>}
    {items.length>0&&<div className="music-link-preview">
     {collection&&<header className="playlist-import-heading">
-     {collection.thumbnail?<img src={collection.thumbnail} alt=""/>:<span className="music-import-collection-art" aria-hidden="true">{KIND_ICON[kind]||<ListMusic size={26}/>}</span>}
-     <div>
+     {collection.thumbnail?<img src={collection.thumbnail} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span className="music-import-collection-art" aria-hidden="true" style={{display:'grid',placeItems:'center'}}>{KIND_ICON[kind]||<ListMusic size={26}/>}</span>}
+     <div style={{minWidth:0}}>
       <span className="music-import-collection-kind">{KIND_LABEL[kind]||'Colección'}</span>
-      <label>Nombre de tu lista<input aria-label="Nombre de la lista importada" value={listName} maxLength={100} onChange={e=>setListName(e.target.value)}/></label>
+      <label style={{display:'flex',flexDirection:'column',gap:6,marginBottom:8}}><span style={{fontSize:11,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.06em'}}>Nombre de la lista</span><input aria-label="Nombre de la lista importada" value={listName} maxLength={100} onChange={e=>setListName(e.target.value)} style={{width:'100%',height:44,padding:'0 14px',fontSize:16,fontWeight:600,fontFamily:"'Inter Tight',sans-serif",color:'var(--text-primary)',background:'var(--bg-elevated)',border:'1px solid var(--border-default)',borderRadius:10,outline:'none',boxSizing:'border-box'}}/></label>
       <p className="music-import-collection-meta">{items.length} canciones{collection.playlist_count>items.length?` · ${collection.playlist_count} totales`:''}{diagnostics?.provider&&` · ${diagnostics.provider}`}</p>
      </div>
     </header>}
@@ -103,8 +103,8 @@ export default function MusicLinkImport(){
      {page.map(item=>{const url=target(item),checked=selected.includes(url);return <li key={url} data-selected={checked} className="music-import-song-row">
       <label className="music-import-song">
        <input type="checkbox" checked={checked} onChange={e=>setSelected(value=>e.target.checked?[...value,url]:value.filter(v=>v!==url))}/>
-       <div className="music-import-song-art" aria-hidden="true">
-        {item.thumbnail?<img src={item.thumbnail} alt="" loading="lazy"/>:<Music size={20}/>}
+       <div className="music-import-song-art" aria-hidden="true" style={{display:'grid',placeItems:'center'}}>
+        {item.thumbnail?<img src={item.thumbnail} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<Music size={20}/>}
        </div>
        <span className="music-import-song-text"><strong>{item.title}</strong><small>{item.channel||'Artista desconocido'}{item.duration?` · ${clock(item.duration)}`:''}</small></span>
       </label>
