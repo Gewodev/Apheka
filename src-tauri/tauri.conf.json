@@ -1,6 +1,6 @@
 {
     "productName":  "West",
-    "version":  "6.27.5",
+    "version":  "6.27.6",
     "identifier":  "com.owa.studio",
     "build":  {
                   "beforeDevCommand":  "pnpm run dev",
@@ -87,7 +87,7 @@
                                     "dialog":  false,
                                     "pubkey":  "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2ODc3Mzk0QTU3MTk3RjEKUldUeGwzR2xsSE9IaGdHMmNKZFJpbzM4TDdkQUM5bngrYjlhVkFrcTdqaGYraTlhUDluRWhRQzYK",
                                     "endpoints":  [
-                                                      "https://github.com/AuthomiaAgency/Owa_Studio/releases/latest/download/latest.json"
+                                                      "https://github.com/AuthomiaAgency/Owa_Studio/releases/latest"
                                                   ],
                                     "windows":  {
                                                     "installMode":  "passive"

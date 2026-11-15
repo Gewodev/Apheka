@@ -34,32 +34,10 @@ export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | n
   
   try {
     const currentVersion = await getVersion();
-    
-    // Primero verificamos si el manifiesto latest.json existe haciendo una petición HEAD/GET directa
-    // Esto evita el falso "no_update" cuando el release no existe (404)
-    const manifestUrl = 'https://github.com/AuthomiaAgency/Owa_Studio/releases/latest/download/latest.json';
-    let manifestExists = false;
-    try {
-      const response = await fetch(manifestUrl, { method: 'HEAD', cache: 'no-cache' });
-      manifestExists = response.ok;
-    } catch {
-      manifestExists = false;
-    }
-    
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check({ timeout });
     
-    // Si el manifiesto NO existe en GitHub, es un error de configuración, no "no hay update"
-    if (!manifestExists) {
-      return { 
-        update: null, 
-        currentVersion, 
-        error: 'No hay releases publicados con información de actualización. El servidor no tiene latest.json configurado.', 
-        errorCode: 'not_found' 
-      };
-    }
-    
-    // Si el manifiesto existe pero update es null, realmente no hay versión nueva
+    // Si update es null, no hay versión nueva (esto es normal)
     if (!update) {
       return { 
         update: null, 
@@ -68,6 +46,31 @@ export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | n
         errorCode: 'no_update' 
       };
     }
+    
+    // Verificar que el update tenga URL válida para descargar
+    // El error "the url field was not set on the updater response" ocurre
+    // cuando el manifiesto de GitHub no tiene platforms.windows-x86_64.url
+    if (!update || typeof update !== 'object') {
+      return { 
+        update: null, 
+        currentVersion, 
+        error: 'Respuesta de actualización inválida del servidor.', 
+        errorCode: 'invalid_response' 
+      };
+    }
+    
+    // @ts-ignore - acceder a la URL interna del update
+    const updateUrl = (update as any).url || (update as any).downloadUrl || (update as any).platforms?.['windows-x86_64']?.url;
+    if (!updateUrl) {
+      console.warn('[Updater] Update object missing URL field:', update);
+      return { 
+        update: null, 
+        currentVersion, 
+        error: 'El servidor de actualizaciones no proporcionó URL de descarga. El release de GitHub puede no tener el instalador de Windows correctamente configurado.', 
+        errorCode: 'missing_url' 
+      };
+    }
+    
     return { update, currentVersion };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -77,7 +80,10 @@ export async function fetchUpdate(timeout = 15000): Promise<{ update: Update | n
     let userMessage = message;
     
     const lowerMsg = message.toLowerCase();
-    if (lowerMsg.includes('network') || lowerMsg.includes('fetch') || lowerMsg.includes('econnrefused') || lowerMsg.includes('timeout') || lowerMsg.includes('enotfound')) {
+    if (lowerMsg.includes('url field was not set') || lowerMsg.includes('url field is not set') || lowerMsg.includes('missing url')) {
+      errorCode = 'missing_url';
+      userMessage = 'El release de GitHub no tiene el instalador de Windows configurado correctamente. Contacta al desarrollador.';
+    } else if (lowerMsg.includes('network') || lowerMsg.includes('fetch') || lowerMsg.includes('econnrefused') || lowerMsg.includes('timeout') || lowerMsg.includes('enotfound')) {
       errorCode = 'network';
       userMessage = 'Error de conexión: no se pudo alcanzar el servidor de actualizaciones. Verifica tu conexión a internet.';
     } else if (lowerMsg.includes('signature') || lowerMsg.includes('pubkey') || lowerMsg.includes('verif')) {
